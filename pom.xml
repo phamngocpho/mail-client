@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.example</groupId>
+    <artifactId>MailClient</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <dependencies>
+        <!-- Interface -->
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>3.2.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf-extras</artifactId>
+            <version>3.2.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf-fonts-roboto</artifactId>
+            <version>2.137</version>
+        </dependency>
+        <dependency>
+            <groupId>com.miglayout</groupId>
+            <artifactId>miglayout-swing</artifactId>
+            <version>11.2</version>
+        </dependency>
+
+
+        <dependency>
+            <groupId>TimingFramework-0.55</groupId>
+            <artifactId>TimingFramework-0.55</artifactId>
+            <version>1.0-SNAPSHOT</version>
+            <scope>system</scope>
+            <systemPath>${basedir}/lib/TimingFramework-0.55.jar</systemPath>
+        </dependency>
+
+        <dependency>
+            <groupId>swing-toast-notifications-1.0.1</groupId>
+            <artifactId>swing-toast-notifications-1.0.1</artifactId>
+            <version>1.0-SNAPSHOT</version>
+            <scope>system</scope>
+            <systemPath>${basedir}/lib/swing-toast-notifications-1.0.1.jar</systemPath>
+        </dependency>
+
+        <dependency>
+            <groupId>swing-jnafilechooser</groupId>
+            <artifactId>swing-jnafilechooser</artifactId>
+            <version>1.0-SNAPSHOT</version>
+            <scope>system</scope>
+            <systemPath>${basedir}/lib/swing-jnafilechooser.jar</systemPath>
+        </dependency>
+
+        <dependency>
+            <groupId>swing-datetime-picker-1.1.3</groupId>
+            <artifactId>swing-datetime-picker-1.1.3</artifactId>
+            <version>1.0-SNAPSHOT</version>
+            <scope>system</scope>
+            <systemPath>${basedir}/lib/swing-datetime-picker-1.1.3.jar</systemPath>
+        </dependency>
+
+        <dependency>
+            <groupId>mssql-jdbc-12.4.2.jre11</groupId>
+            <artifactId>mssql-jdbc-12.4.2.jre11</artifactId>
+            <version>1.0-SNAPSHOT</version>
+            <scope>system</scope>
+            <systemPath>${basedir}/lib/mssql-jdbc-12.4.2.jre11.jar</systemPath>
+        </dependency>
+
+        <dependency>
+            <groupId>jna-5.5.0</groupId>
+            <artifactId>jna-5.5.0</artifactId>
+            <version>1.0-SNAPSHOT</version>
+            <scope>system</scope>
+            <systemPath>${basedir}/lib/jna-5.5.0.jar</systemPath>
+        </dependency>
+    </dependencies>
+
+    <properties>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+</project>
