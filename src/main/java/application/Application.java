@@ -20,7 +20,7 @@ public class Application extends JFrame {
 
     private void init() {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-//        Notifications.getInstance().show(Notifications.Type.SUCCESS, "test");
+        Notifications.getInstance().show(Notifications.Type.SUCCESS, Notifications.Location.TOP_CENTER, "Welcome");
         setSize((int) Value.dimension.getWidth(), (int) (Value.dimension.getHeight() - Value.taskBarSize));
         Notifications.getInstance().setJFrame(this);
         CustomNotification customNotification = new CustomNotification();
@@ -34,9 +34,9 @@ public class Application extends JFrame {
     public static void main(String[] args) {
         FlatRobotoFont.install();
         FlatMacDarkLaf.setup();
-        UIManager.put("defaultFont", new Font(FlatRobotoFont.FAMILY, Font.PLAIN, 15));
+        UIManager.put("defaultFont", new Font(FlatRobotoFont.FAMILY, Font.PLAIN, Value.systemFont.getSize() + 3));
         EventQueue.invokeLater(() -> new Application().setVisible(true));
 
-//        FormsManager.getInstance().showForm(new sth);
+//        FormsManager.getInstance().showForm(new JPanel);
     }
 }
