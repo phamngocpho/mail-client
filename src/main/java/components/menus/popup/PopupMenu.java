@@ -1,4 +1,4 @@
-package components.menus;
+package components.menus.popup;
 
 import javax.swing.*;
 import java.awt.*;

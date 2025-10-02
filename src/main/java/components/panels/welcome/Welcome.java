@@ -1,6 +1,9 @@
 package components.panels.welcome;
 
+import com.formdev.flatlaf.FlatClientProperties;
 import components.buttons.GradientButton;
+import components.forms.FormsManager;
+import components.panels.MainPanel;
 import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
@@ -14,16 +17,17 @@ public class Welcome extends JPanel {
     private void init() {
         setLayout(new MigLayout("fill, insets 0"));
 
-        GradientButton btn = new GradientButton();
-        btn.setText("Hello World");
+        JButton btn = new JButton("Hello World");
+        btn.putClientProperty(FlatClientProperties.STYLE, "arc:100");
 
-        btn.setColor1(Color.decode("#2C2C2C"));
-        btn.setColor2(Color.decode("#2C2C2C"));
-        btn.setSizeSpeed(12f);
+        btn.setBackground(Color.decode("#2C2C2C"));
+//        btn.setFocusPainted(false);
+        btn.addActionListener(e -> {
+            FormsManager.getInstance().showForm(new MainPanel());
+        });
 
         btn.setPreferredSize(new Dimension(240, 80));
         btn.setMaximumSize(new Dimension(360, 120));
-
         add(btn, "dock center, span, align center");
     }
 }
