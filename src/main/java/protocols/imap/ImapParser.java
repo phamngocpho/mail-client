@@ -1,6 +1,10 @@
 package protocols.imap;
 
 import models.Email;
+import org.jsoup.Jsoup;
+
+import java.nio.CharBuffer;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -160,7 +164,7 @@ public class ImapParser {
         Pattern pattern = Pattern.compile("=\\?UTF-8\\?B\\?([^?]+)\\?=");
         Matcher matcher = pattern.matcher(subject);
 
-        StringBuffer result = new StringBuffer();
+        StringBuilder result = new StringBuilder();
         while (matcher.find()) {
             String encoded = matcher.group(1);
             String decoded = new String(Base64.getDecoder().decode(encoded));
@@ -191,7 +195,7 @@ public class ImapParser {
                 } catch (Exception ignored) {}
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            System.err.println(e.getMessage());
         }
         return new Date(); // Fallback to current date
     }
@@ -209,37 +213,219 @@ public class ImapParser {
         return 0;
     }
 
-    /**
-     * Parse email body từ FETCH response
-     */
     public static String parseEmailBody(String response) {
-        StringBuilder body = new StringBuilder();
-        boolean inBody = false;
+        String rawBody = extractRawBody(response);
+        if (rawBody.isEmpty()) return "";
 
-        String[] lines = response.split("\r\n");
-
-        for (String line : lines) {
-            // Bắt đầu body sau dòng "BODY[TEXT] {size}"
-            if (line.contains("BODY[TEXT]")) {
-                inBody = true;
-                continue;
-            }
-
-            // Kết thúc khi gặp tagged response
-            if (line.matches("^[A-Z0-9]+ (OK|NO|BAD).*")) {
-                break;
-            }
-
-            if (inBody) {
-                // Bỏ qua dòng chứa chỉ ")"
-                if (line.trim().equals(")")) {
+        String encoding = detectEncodingForPart(response, rawBody);  // Detect cho part cụ thể
+        String decodedBody;
+        try {
+            switch (encoding.toLowerCase()) {
+                case "base64":
+                    // Clean base64: Loại whitespace, \r\n từ lines
+                    StringBuilder cleanBase64 = new StringBuilder(rawBody.replaceAll("[\r\n]+", "").replaceAll("\\s+", ""));
+                    // Add padding thiếu
+                    while (cleanBase64.length() % 4 != 0) {
+                        cleanBase64.append("=");
+                    }
+                    if (isValidBase64(cleanBase64.toString())) {
+                        byte[] decodedBytes = Base64.getDecoder().decode(cleanBase64.toString());
+                        decodedBody = new String(decodedBytes, StandardCharsets.UTF_8);
+                    } else {
+                        System.err.println("Invalid base64 detected, skipping decode.");
+                        decodedBody = rawBody.trim();
+                    }
                     break;
+                case "quoted-printable":
+                    decodedBody = decodeQuotedPrintable(rawBody);
+                    break;
+                default:
+                    decodedBody = rawBody.trim();
+                    break;
+            }
+
+            // Xử lý charset fallback
+            if (!isUtf8Valid(decodedBody)) {
+                try {
+                    decodedBody = new String(decodedBody.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
+                } catch (Exception ignored) {
+                    // Keep as is
                 }
-                body.append(line).append("\n");
+            }
+
+            // Clean HTML nếu có tags
+            if (decodedBody.contains("<")) {
+                decodedBody = htmlToPlainText(decodedBody);
+            }
+
+        } catch (Exception e) {
+            System.err.println("Body parse error: " + e.getMessage());
+            decodedBody = rawBody.trim();  // Fallback
+        }
+
+        return decodedBody.trim();
+    }
+
+    /**
+     * Extract raw body content, tách multipart chính xác hơn
+     */
+    private static String extractRawBody(String response) {
+        String boundary = detectBoundary(response);
+        if (boundary == null) {
+            // Non-multipart fallback
+            int bodyStart = response.indexOf("BODY[TEXT]") + 10;
+            if (bodyStart > 10) {
+                int end = response.indexOf("\r\n", bodyStart);
+                return response.substring(bodyStart, end > 0 ? end : response.length()).trim();
+            }
+            return "";
+        }
+
+        // Split parts bằng boundary
+        String[] parts = response.split(Pattern.quote(boundary), -1);  // -1 để giữ empty parts
+        String plainContent = "";
+
+        for (int i = 1; i < parts.length - 1; i++) {  // Skip first/last
+            String part = parts[i].trim();
+            if (part.toLowerCase().contains("text/plain")) {
+                // Tìm end headers (\r\n\r\n)
+                int headerEnd = part.indexOf("\r\n\r\n");
+                if (headerEnd != -1) {
+                    plainContent = part.substring(headerEnd + 4).trim();  // Content sau
+                    // Cut tại next boundary
+                    int nextBound = plainContent.indexOf(boundary);
+                    if (nextBound != -1) {
+                        plainContent = plainContent.substring(0, nextBound).trim();
+                    }
+                    return plainContent;  // Found plain, return ngay
+                }
             }
         }
 
-        return body.toString().trim();
+        // Fallback HTML part
+        for (int i = 1; i < parts.length - 1; i++) {
+            String part = parts[i].trim();
+            if (part.toLowerCase().contains("text/html")) {
+                int headerEnd = part.indexOf("\r\n\r\n");
+                if (headerEnd != -1) {
+                    String htmlContent = part.substring(headerEnd + 4).trim();
+                    int nextBound = htmlContent.indexOf(boundary);
+                    if (nextBound != -1) {
+                        htmlContent = htmlContent.substring(0, nextBound).trim();
+                    }
+                    plainContent = htmlToPlainText(htmlContent);  // Clean ngay
+                    return plainContent;
+                }
+            }
+        }
+
+        return plainContent;
+    }
+
+    /**
+     * Detect boundary từ Content-Type
+     */
+    private static String detectBoundary(String response) {
+        Pattern pattern = Pattern.compile("boundary=[\"']?([^\";\\s]+)[\"']?", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(response);
+        if (matcher.find()) {
+            return "--" + matcher.group(1);
+        }
+        return null;
+    }
+
+    /**
+     * Detect encoding cho part cụ thể (tìm trong full response gần part)
+     */
+    private static String detectEncodingForPart(String response, String rawBody) {
+        // Tìm encoding gần rawBody position
+        int startPos = response.indexOf(rawBody);
+        if (startPos == -1) startPos = 0;
+        String context = response.substring(Math.max(0, startPos - 200), startPos + 200);
+
+        Pattern encPattern = Pattern.compile("Content-Transfer-Encoding:\\s*([a-zA-Z0-9-]+)", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = encPattern.matcher(context);
+        if (matcher.find()) {
+            return matcher.group(1).trim();
+        }
+        return "7bit";
+    }
+
+    /**
+     * Decode quoted-printable cải thiện (handle =XX hex ở mọi vị trí)
+     */
+    private static String decodeQuotedPrintable(String qp) {
+        if (qp == null) return "";
+        // Remove soft line breaks
+        qp = qp.replaceAll("=\\r?\\n", "");
+        // Replace =XX hex với char
+        Pattern hexPattern = Pattern.compile("=([0-9A-Fa-f]{2})");
+        Matcher hexMatcher = hexPattern.matcher(qp);
+        StringBuilder sb = new StringBuilder();
+        while (hexMatcher.find()) {
+            try {
+                int hexValue = Integer.parseInt(hexMatcher.group(1), 16);
+                hexMatcher.appendReplacement(sb, String.valueOf((char) hexValue));
+            } catch (Exception ignored) {
+                hexMatcher.appendReplacement(sb, hexMatcher.group(0));
+            }
+        }
+        hexMatcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    // Giữ nguyên các helper khác: isValidBase64, isUtf8Valid, htmlToPlainText, decodeHtmlEntities
+    private static boolean isValidBase64(String str) {
+        if (str == null || str.isEmpty()) return false;
+        // Regex strict hơn
+        return str.matches("^([A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$");
+    }
+
+    private static boolean isUtf8Valid(String str) {
+        try {
+            StandardCharsets.UTF_8.newEncoder().encode(CharBuffer.wrap(str));
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static String htmlToPlainText(String html) {
+        if (html == null) return "";
+        try {
+            return Jsoup.parse(html).text();
+        } catch (Exception e) {
+            // Fallback regex
+            html = decodeHtmlEntities(html);
+            Pattern tagPattern = Pattern.compile("<[^>]*>");
+            html = tagPattern.matcher(html).replaceAll(" ");
+            html = html.replaceAll("\\s+", " ").trim();
+            return html;
+        }
+    }
+
+    private static String decodeHtmlEntities(String text) {
+        if (text == null) return "";
+        text = text.replaceAll("&amp;", "&")
+                .replaceAll("&lt;", "<")
+                .replaceAll("&gt;", ">")
+                .replaceAll("&quot;", "\"")
+                .replaceAll("&#39;", "'")
+                .replaceAll("&nbsp;", " ");
+        // Numeric
+        Pattern numPattern = Pattern.compile("&#(\\d+);");
+        Matcher numMatcher = numPattern.matcher(text);
+        StringBuilder sb = new StringBuilder();
+        while (numMatcher.find()) {
+            try {
+                char ch = (char) Integer.parseInt(numMatcher.group(1));
+                numMatcher.appendReplacement(sb, String.valueOf(ch));
+            } catch (Exception ignored) {
+                numMatcher.appendReplacement(sb, numMatcher.group(0));
+            }
+        }
+        numMatcher.appendTail(sb);
+        return sb.toString();
     }
 
     /**
