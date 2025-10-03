@@ -2,7 +2,6 @@ package controllers;
 
 import components.panels.dashboard.Inbox;
 import models.Email;
-import protocols.imap.ImapException;
 import services.ImapService;
 
 import javax.swing.*;
@@ -12,8 +11,8 @@ import java.util.List;
  * Controller để kết nối ImapService với Inbox GUI
  */
 public class ImapController {
-    private Inbox inboxPanel;
-    private ImapService imapService;
+    private final Inbox inboxPanel;
+    private final ImapService imapService;
     private String currentFolder = "INBOX";
 
     public ImapController(Inbox inboxPanel) {
@@ -26,7 +25,7 @@ public class ImapController {
      */
     public void connect(String host, String email, String password) {
         // Show loading state
-        SwingUtilities.invokeLater(() -> inboxPanel.showLoading());
+        SwingUtilities.invokeLater(inboxPanel::showLoading);
 
         SwingWorker<List<Email>, Void> worker = new SwingWorker<>() {
             @Override
@@ -35,7 +34,7 @@ public class ImapController {
                 imapService.connect(host, email, password);
 
                 // Fetch emails from INBOX
-                return imapService.fetchRecentEmails(currentFolder, 100);
+                return imapService.fetchRecentEmails(currentFolder, 10);
             }
 
             @Override
@@ -47,7 +46,6 @@ public class ImapController {
                     System.out.println("✓ Connected successfully! Loaded " + emails.size() + " emails.");
                 } catch (Exception e) {
                     showError("Failed to connect: " + e.getMessage());
-                    e.printStackTrace();
                 }
             }
         };
@@ -73,7 +71,6 @@ public class ImapController {
                     inboxPanel.loadEmails(emails);
                 } catch (Exception e) {
                     showError("Failed to load emails: " + e.getMessage());
-                    e.printStackTrace();
                 }
             }
         };
@@ -85,7 +82,7 @@ public class ImapController {
      * Refresh current folder
      */
     public void refresh() {
-        loadFolder(currentFolder, 100);
+        loadFolder(currentFolder, 10);
     }
 
     /**
@@ -94,7 +91,7 @@ public class ImapController {
     public void updateEmailFlags(Email email) {
         SwingWorker<Void, Void> worker = new SwingWorker<>() {
             @Override
-            protected Void doInBackground() throws Exception {
+            protected Void doInBackground() {
                 // TODO: Implement flag update on IMAP server
                 // imapService.updateFlags(email.getMessageNumber(), email.getFlags());
                 return null;
@@ -132,7 +129,6 @@ public class ImapController {
                     inboxPanel.updateEmailBody(email);
                 } catch (Exception e) {
                     showError("Failed to load email body: " + e.getMessage());
-                    e.printStackTrace();
                 }
             }
         };
@@ -144,16 +140,14 @@ public class ImapController {
      * Disconnect from IMAP
      */
     public void disconnect() {
-        if (imapService != null) {
-            imapService.disconnect();
-        }
+        imapService.disconnect();
     }
 
     /**
      * Check if connected
      */
     public boolean isConnected() {
-        return imapService != null && imapService.isConnected();
+        return imapService.isConnected();
     }
 
     /**

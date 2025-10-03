@@ -113,14 +113,11 @@ public class ImapClient {
             throw new ImapException("No folder selected");
         }
 
-        List<Email> emails = new ArrayList<>();
+        List<Email> emails;
         String tag = nextTag();
 
         // Fetch headers: FROM, TO, SUBJECT, DATE, FLAGS
-        String command = String.format(
-                "%s FETCH %d:%d (FLAGS BODY[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID)])",
-                tag, start, end
-        );
+        String command = String.format("%s FETCH %d:%d (FLAGS BODY[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID)] BODY.PEEK[])", tag, start, end);
 
         System.out.println("→ " + command);
         sendCommand(command);
@@ -220,14 +217,14 @@ public class ImapClient {
             if (writer != null) writer.close();
             if (socket != null) socket.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println(e.getMessage());
         }
         connected = false;
         authenticated = false;
         selectedFolder = null;
     }
 
-    // ==================== Helper Methods ====================
+    // Helper Methods
 
     private String nextTag() {
         return Constants.IMAP_TAG_PREFIX + String.format("%03d", ++tagCounter);
@@ -286,6 +283,7 @@ public class ImapClient {
                 int msgNum = extractMessageNumber(block);
                 if (msgNum > 0) {
                     Email email = ImapParser.parseEmailFromFetch(block, msgNum);
+                    email.setBody(ImapParser.parseEmailBody(block));
                     emails.add(email);
                 }
             }
