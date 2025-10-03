@@ -114,6 +114,33 @@ public class ImapController {
     }
 
     /**
+     * Load email body khi user click vào email
+     */
+    public void loadEmailBody(Email email, String folderName) {
+        SwingWorker<String, Void> worker = new SwingWorker<>() {
+            @Override
+            protected String doInBackground() throws Exception {
+                return imapService.fetchEmailBody(folderName, email.getMessageNumber());
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    String body = get();
+                    email.setBody(body);
+                    // Trigger UI update
+                    inboxPanel.updateEmailBody(email);
+                } catch (Exception e) {
+                    showError("Failed to load email body: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+        };
+
+        worker.execute();
+    }
+
+    /**
      * Disconnect from IMAP
      */
     public void disconnect() {

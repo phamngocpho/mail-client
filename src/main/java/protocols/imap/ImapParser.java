@@ -210,6 +210,39 @@ public class ImapParser {
     }
 
     /**
+     * Parse email body từ FETCH response
+     */
+    public static String parseEmailBody(String response) {
+        StringBuilder body = new StringBuilder();
+        boolean inBody = false;
+
+        String[] lines = response.split("\r\n");
+
+        for (String line : lines) {
+            // Bắt đầu body sau dòng "BODY[TEXT] {size}"
+            if (line.contains("BODY[TEXT]")) {
+                inBody = true;
+                continue;
+            }
+
+            // Kết thúc khi gặp tagged response
+            if (line.matches("^[A-Z0-9]+ (OK|NO|BAD).*")) {
+                break;
+            }
+
+            if (inBody) {
+                // Bỏ qua dòng chứa chỉ ")"
+                if (line.trim().equals(")")) {
+                    break;
+                }
+                body.append(line).append("\n");
+            }
+        }
+
+        return body.toString().trim();
+    }
+
+    /**
      * Check if response is OK
      */
     public static boolean isOK(String response, String tag) {

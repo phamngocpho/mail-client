@@ -112,6 +112,26 @@ public class ImapService {
     }
 
     /**
+     * Fetch body của email cụ thể
+     */
+    public String fetchEmailBody(String folderName, int messageNumber) throws ImapException {
+        if (!isConnected) {
+            throw new ImapException("Not connected. Call connect() first.");
+        }
+
+        try {
+            // Ensure folder is selected
+            if (!folderName.equals(client.getSelectedFolder())) {
+                client.selectFolder(folderName);
+            }
+
+            return client.fetchEmailBody(messageNumber);
+        } catch (ImapException e) {
+            throw new ImapException("Failed to fetch email body: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * List tất cả folders
      */
     public List<Folder> listFolders() throws ImapException {

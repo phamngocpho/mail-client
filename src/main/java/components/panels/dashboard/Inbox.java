@@ -299,8 +299,31 @@ public class Inbox extends JPanel {
         SimpleDateFormat sdf = new SimpleDateFormat("EEE, MMM dd, yyyy 'at' hh:mm a");
         dateLabel.setText(email.getDate() != null ? sdf.format(email.getDate()) : "");
 
-        bodyTextArea.setText(email.getBody() != null ? email.getBody() : "(No content)");
-        bodyTextArea.setCaretPosition(0);
+        // Nếu body chưa có, load từ server
+        if (email.getBody() == null || email.getBody().isEmpty()) {
+            bodyTextArea.setText("Loading email content...");
+            if (controller != null && controller.isConnected()) {
+                controller.loadEmailBody(email, "INBOX");
+            }
+        } else {
+            bodyTextArea.setText(email.getBody());
+            bodyTextArea.setCaretPosition(0);
+        }
+    }
+
+    /**
+     * Update email body sau khi load xong
+     */
+    public void updateEmailBody(Email email) {
+        // Tìm email trong list và update UI
+        int selectedRow = emailTable.getSelectedRow();
+        if (selectedRow >= 0 && selectedRow < emails.size()) {
+            Email selectedEmail = emails.get(selectedRow);
+            if (selectedEmail.getMessageNumber() == email.getMessageNumber()) {
+                bodyTextArea.setText(email.getBody() != null ? email.getBody() : "(No content)");
+                bodyTextArea.setCaretPosition(0);
+            }
+        }
     }
 
     /**

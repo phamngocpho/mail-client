@@ -138,6 +138,28 @@ public class ImapClient {
     }
 
     /**
+     * Fetch body của một email cụ thể
+     */
+    public String fetchEmailBody(int messageNumber) throws ImapException {
+        if (selectedFolder == null) {
+            throw new ImapException("No folder selected");
+        }
+
+        String tag = nextTag();
+        String command = String.format("%s FETCH %d BODY[TEXT]", tag, messageNumber);
+
+        System.out.println("→ " + command);
+        sendCommand(command);
+        String response = readFullResponse(tag);
+
+        if (ImapParser.isError(response, tag)) {
+            throw new ImapException(command, response, "Failed to fetch email body");
+        }
+
+        return ImapParser.parseEmailBody(response);
+    }
+
+    /**
      * Fetch all emails từ folder
      */
     public List<Email> fetchAllEmails() throws ImapException {
