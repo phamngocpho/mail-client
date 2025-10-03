@@ -5,7 +5,6 @@ import net.miginfocom.swing.MigLayout;
 import values.Value;
 
 import javax.swing.*;
-import javax.swing.border.LineBorder;
 
 public class MainPanel extends JPanel {
 
@@ -22,7 +21,7 @@ public class MainPanel extends JPanel {
         menu = new MainMenu();
 
         contentArea = new JPanel(new MigLayout("fill, insets 0"));
-        contentArea.setBorder(new LineBorder(Value.deep_blue, 1));
+//        contentArea.setBorder(new LineBorder(Value.deep_blue, 1));
 
         menu.setMenuItemClickListener(this::setContent);
 
@@ -36,10 +35,12 @@ public class MainPanel extends JPanel {
 
     // Method để thay đổi content
     public void setContent(JPanel panel) {
-        contentArea.removeAll();
-        contentArea.add(panel, "grow");
-        contentArea.revalidate();
-        contentArea.repaint();
+        SwingUtilities.invokeLater(() -> {
+            contentArea.removeAll();
+            contentArea.add(panel, "grow");
+            contentArea.revalidate();
+            contentArea.repaint();
+        });
     }
 
     public MainMenu getMenu() {

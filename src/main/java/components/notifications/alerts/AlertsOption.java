@@ -59,7 +59,7 @@ public class AlertsOption {
         if (messageType == MessageAlerts.MessageType.SUCCESS) {
             Icon effects[] = new Icon[]{
                     new FlatSVGIcon("Pictures/effect/check.svg"),
-                    new FlatSVGIcon("Pictures/effect/star.svg"),
+                    new FlatSVGIcon("Pictures/effect/starred.svg"),
                     new FlatSVGIcon("Pictures/effect/firework.svg"),
                     new FlatSVGIcon("Pictures/effect/balloon.svg")
             };

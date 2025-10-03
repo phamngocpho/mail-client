@@ -117,7 +117,7 @@ public class MainMenu extends JPanel {
         JPanel moreContent = createContentPanel("More Content");
 
         MenuItem inbox = createMenuItem("icons/menu/inbox.svg", "Inbox", true, inboxContent);
-        MenuItem starred = createMenuItem("icons/menu/starred.svg", "Starred", false, starredContent);
+        MenuItem starred = createMenuItem("icons/inbox/star_outline.svg", "Starred", false, starredContent);
         MenuItem snoozed = createMenuItem("icons/menu/snoozed.svg", "Snoozed", false, snoozedContent);
         MenuItem sent = createMenuItem("icons/menu/sent.svg", "Sent", false, sentContent);
         MenuItem drafts = createMenuItem("icons/menu/drafts.svg", "Drafts", false, draftsContent);
