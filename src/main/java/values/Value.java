@@ -23,7 +23,7 @@ public class Value {
     public static Color unsent_message = Color.decode("#8b8c90");
     public static Color sent_time = Color.decode("#686868");
     public static Color white = Color.decode("#ffffff");
-    public static final String app_password = "cqnx fusu huaa cwuf";
+    public static final String app_password = "xeui zntc nivt mtcw";
     public static final String email = "chatapplication41@gmail.com";
     public static final String url = "jdbc:sqlserver://localhost:1433;" + "databaseName=Application;" + "user=sa;" + "password=160;" + "encrypt=true;" + "trustServerCertificate=true";
     public static final String resources = System.getProperty("user.dir") + "/src/main/resources/";
