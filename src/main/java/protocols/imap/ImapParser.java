@@ -1,7 +1,6 @@
 package protocols.imap;
 
 import models.Email;
-import org.jsoup.Jsoup;
 
 import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
@@ -392,10 +391,7 @@ public class ImapParser {
 
     private static String htmlToPlainText(String html) {
         if (html == null) return "";
-        try {
-            return Jsoup.parse(html).text();
-        } catch (Exception e) {
-            // Fallback regex
+        else {
             html = decodeHtmlEntities(html);
             Pattern tagPattern = Pattern.compile("<[^>]*>");
             html = tagPattern.matcher(html).replaceAll(" ");
@@ -426,13 +422,6 @@ public class ImapParser {
         }
         numMatcher.appendTail(sb);
         return sb.toString();
-    }
-
-    /**
-     * Check if response is OK
-     */
-    public static boolean isOK(String response, String tag) {
-        return response.contains(tag + " OK");
     }
 
     /**

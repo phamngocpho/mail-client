@@ -69,7 +69,7 @@ public class ImapClient {
         sendCommand(command);
         String response = readFullResponse(tag);
 
-        if (!ImapParser.isOK(response, tag)) {
+        if (ImapParser.isError(response, tag)) {
             throw new ImapException(command, response, "Login failed");
         }
 
@@ -92,7 +92,7 @@ public class ImapClient {
         sendCommand(command);
         String response = readFullResponse(tag);
 
-        if (!ImapParser.isOK(response, tag)) {
+        if (ImapParser.isError(response, tag)) {
             throw new ImapException(command, response, "Failed to select folder: " + folderName);
         }
 
