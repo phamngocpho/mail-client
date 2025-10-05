@@ -1,6 +1,8 @@
 package controllers;
 
 import models.Email;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import protocols.smtp.SmtpException;
 import services.SmtpService;
 
@@ -15,6 +17,7 @@ public class SmtpController {
     private String password;
 
     private boolean isConfigured = false;
+    private static final Logger logger = LoggerFactory.getLogger(SmtpController.class);
 
     private SmtpController() {
         this.smtpService = new SmtpService();
@@ -77,7 +80,7 @@ public class SmtpController {
      */
     public boolean sendEmail(Email email) {
         if (!isConfigured) {
-            System.err.println("SMTP not configured. Please call configure() first.");
+            logger.error("SMTP not configured. Please call configure() first.");
             return false;
         }
 
@@ -98,7 +101,7 @@ public class SmtpController {
             return true;
 
         } catch (SmtpException e) {
-            System.err.println("Failed to send email: " + e.getMessage());
+            logger.error("Failed to send email: {}", e.getMessage());
             return false;
         } finally {
             smtpService.disconnect();
@@ -129,7 +132,7 @@ public class SmtpController {
      */
     public boolean testConnection() {
         if (!isConfigured) {
-            System.err.println("SMTP not configured. Please call configure() first.");
+            logger.error("SMTP not configured. Please call configure() first.");
             return false;
         }
 
@@ -145,7 +148,7 @@ public class SmtpController {
             SmtpService.quickSend(host, username, password, to, subject, body);
             return true;
         } catch (SmtpException e) {
-            System.err.println("Quick send failed: " + e.getMessage());
+            logger.error("Quick send failed: {}", e.getMessage());
             return false;
         }
     }

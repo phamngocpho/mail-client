@@ -1,6 +1,8 @@
 package services;
 
 import models.Email;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import protocols.smtp.SmtpException;
 import protocols.smtp.SmtpSender;
 
@@ -9,6 +11,7 @@ public class SmtpService {
     private String currentHost;
     private String currentUser;
     private boolean isConnected = false;
+    private static final Logger logger = LoggerFactory.getLogger(SmtpService.class);
 
     public SmtpService() {
         this.sender = new SmtpSender();

@@ -1,6 +1,8 @@
 package protocols.smtp;
 
 import models.Email;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import utils.Constants;
 import utils.NetworkUtils;
 
@@ -19,6 +21,7 @@ public class SmtpSender {
     private boolean connected = false;
     private boolean authenticated = false;
     private String serverName;
+    private static final Logger logger = LoggerFactory.getLogger(SmtpSender.class);
 
     /**
      * Connect to SMTP server với TLS (port 587)
@@ -312,7 +315,7 @@ public class SmtpSender {
             if (writer != null) writer.close();
             if (socket != null) socket.close();
         } catch (IOException e) {
-            System.err.println(e.getMessage());
+            logger.error("Socket close failed: {}", e.getMessage());
         }
         connected = false;
         authenticated = false;
