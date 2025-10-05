@@ -256,7 +256,6 @@ public class GradientButton extends JButton {
         float x = pressedLocation.x - (pressedSize / 2);
         float y = pressedLocation.y - (pressedSize / 2);
 
-        // Đảm bảo vòng tròn pressed effect cũng mượt
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
         g2.fillOval((int) x, (int) y, (int) pressedSize, (int) pressedSize);

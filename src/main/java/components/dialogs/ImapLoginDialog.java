@@ -6,6 +6,9 @@ import components.notifications.popup.component.SimplePopupBorder;
 import controllers.ImapController;
 import controllers.SmtpController;
 import net.miginfocom.swing.MigLayout;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import protocols.imap.ImapParser;
 import raven.toast.Notifications;
 
 import javax.swing.*;
@@ -26,6 +29,7 @@ public class ImapLoginDialog extends JDialog {
 
     private final ImapController imapController;
     private boolean connected = false;
+    private static final Logger logger = LoggerFactory.getLogger(ImapLoginDialog.class);
 
     public ImapLoginDialog(Frame parent, ImapController controller) {
         super(parent, "Connect to Email Server", true);
@@ -157,10 +161,11 @@ public class ImapLoginDialog extends JDialog {
                     connected = true;
 
                     Notifications.getInstance().show(Notifications.Type.SUCCESS, Notifications.Location.TOP_CENTER, "Connected successfully! Both IMAP and SMTP are configured.");
-
                     dispose();
                 } catch (Exception e) {
                     Notifications.getInstance().show(Notifications.Type.ERROR, "Connection failed: " + e.getMessage());
+                    logger.error(e.getMessage(), e);
+
                     connectButton.setEnabled(true);
                     connectButton.setText("Connect");
                 }

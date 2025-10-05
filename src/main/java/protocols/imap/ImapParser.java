@@ -14,6 +14,15 @@ import java.util.regex.Pattern;
 public class ImapParser {
     private static final Logger logger = LoggerFactory.getLogger(ImapParser.class);
 
+    public static class EmailBody {
+        public String plainText;
+        public String html;
+
+        public EmailBody() {
+            this.plainText = "";
+            this.html = "";
+        }
+    }
     /**
      * Parse email từ FETCH response
      * Format: * 1 FETCH (FLAGS (\Seen) BODY[HEADER.FIELDS (FROM TO SUBJECT DATE)] {123}
@@ -215,113 +224,124 @@ public class ImapParser {
         return 0;
     }
 
-    public static String parseEmailBody(String response) {
-        String rawBody = extractRawBody(response);
-        if (rawBody.isEmpty()) return "";
-
-        String encoding = detectEncodingForPart(response, rawBody);  // Detect cho part cụ thể
-        String decodedBody;
-        try {
-            switch (encoding.toLowerCase()) {
-                case "base64":
-                    // Clean base64: Loại whitespace, \r\n từ lines
-                    StringBuilder cleanBase64 = new StringBuilder(rawBody.replaceAll("[\r\n]+", "").replaceAll("\\s+", ""));
-                    // Add padding thiếu
-                    while (cleanBase64.length() % 4 != 0) {
-                        cleanBase64.append("=");
-                    }
-                    if (isValidBase64(cleanBase64.toString())) {
-                        byte[] decodedBytes = Base64.getDecoder().decode(cleanBase64.toString());
-                        decodedBody = new String(decodedBytes, StandardCharsets.UTF_8);
-                    } else {
-                        logger.error("Invalid base64 detected, skipping decode.");
-                        decodedBody = rawBody.trim();
-                    }
-                    break;
-                case "quoted-printable":
-                    decodedBody = decodeQuotedPrintable(rawBody);
-                    break;
-                default:
-                    decodedBody = rawBody.trim();
-                    break;
-            }
-
-            // Xử lý charset fallback
-            if (!isUtf8Valid(decodedBody)) {
-                try {
-                    decodedBody = new String(decodedBody.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
-                } catch (Exception ignored) {
-                    // Keep as is
-                }
-            }
-
-            // Clean HTML nếu có tags
-            if (decodedBody.contains("<")) {
-                decodedBody = htmlToPlainText(decodedBody);
-            }
-
-        } catch (Exception e) {
-            logger.error("Body parse error: {}", e.getMessage());
-            decodedBody = rawBody.trim();  // Fallback
+    public static EmailBody parseEmailBody(String response) {
+        EmailBody emailBody = extractRawBody(response);
+        if (emailBody.plainText.isEmpty() && emailBody.html.isEmpty()) {
+            return emailBody;
         }
 
-        return decodedBody.trim();
+        if (!emailBody.plainText.isEmpty()) {
+            String encoding = detectEncodingForPart(response, emailBody.plainText);
+            emailBody.plainText = decodeContent(emailBody.plainText, encoding);
+        }
+
+        // Decode HTML nếu có
+        if (!emailBody.html.isEmpty()) {
+            String encoding = detectEncodingForPart(response, emailBody.html);
+            emailBody.html = decodeContent(emailBody.html, encoding);
+        }
+
+        return emailBody;
     }
 
     /**
      * Extract raw body content, tách multipart chính xác hơn
      */
-    private static String extractRawBody(String response) {
+    private static EmailBody extractRawBody(String response) {
+        EmailBody body = new EmailBody();
         String boundary = detectBoundary(response);
+
         if (boundary == null) {
-            // Non-multipart fallback
-            int bodyStart = response.indexOf("BODY[TEXT]") + 10;
+            // Non-multipart: detect xem là HTML hay plain
+            int bodyStart = response.indexOf("BODY[TEXT]");
             if (bodyStart > 10) {
+                bodyStart += 10;
                 int end = response.indexOf("\r\n", bodyStart);
-                return response.substring(bodyStart, end > 0 ? end : response.length()).trim();
+                String content = response.substring(bodyStart, end > 0 ? end : response.length()).trim();
+
+                if (response.toLowerCase().contains("text/html")) {
+                    body.html = content;
+                    body.plainText = htmlToPlainText(content);
+                } else {
+                    body.plainText = content;
+                }
             }
-            return "";
+            return body;
         }
 
         // Split parts bằng boundary
-        String[] parts = response.split(Pattern.quote(boundary), -1);  // -1 để giữ empty parts
-        String plainContent = "";
+        String[] parts = response.split(Pattern.quote(boundary), -1);
 
-        for (int i = 1; i < parts.length - 1; i++) {  // Skip first/last
-            String part = parts[i].trim();
-            if (part.toLowerCase().contains("text/plain")) {
-                // Tìm end headers (\r\n\r\n)
-                int headerEnd = part.indexOf("\r\n\r\n");
-                if (headerEnd != -1) {
-                    plainContent = part.substring(headerEnd + 4).trim();  // Content sau
-                    // Cut tại next boundary
-                    int nextBound = plainContent.indexOf(boundary);
-                    if (nextBound != -1) {
-                        plainContent = plainContent.substring(0, nextBound).trim();
-                    }
-                    return plainContent;  // Found plain, return ngay
-                }
-            }
-        }
-
-        // Fallback HTML part
         for (int i = 1; i < parts.length - 1; i++) {
             String part = parts[i].trim();
+
+            // Parse text/plain
+            if (part.toLowerCase().contains("text/plain")) {
+                int headerEnd = part.indexOf("\r\n\r\n");
+                if (headerEnd != -1) {
+                    String content = part.substring(headerEnd + 4).trim();
+                    int nextBound = content.indexOf(boundary);
+                    if (nextBound != -1) {
+                        content = content.substring(0, nextBound).trim();
+                    }
+                    body.plainText = content;
+                }
+            }
+
+            // Parse text/html
             if (part.toLowerCase().contains("text/html")) {
                 int headerEnd = part.indexOf("\r\n\r\n");
                 if (headerEnd != -1) {
-                    String htmlContent = part.substring(headerEnd + 4).trim();
-                    int nextBound = htmlContent.indexOf(boundary);
+                    String content = part.substring(headerEnd + 4).trim();
+                    int nextBound = content.indexOf(boundary);
                     if (nextBound != -1) {
-                        htmlContent = htmlContent.substring(0, nextBound).trim();
+                        content = content.substring(0, nextBound).trim();
                     }
-                    plainContent = htmlToPlainText(htmlContent);  // Clean ngay
-                    return plainContent;
+                    body.html = content;
                 }
             }
         }
 
-        return plainContent;
+        // Nếu chỉ có HTML, tạo plain text từ HTML
+        if (body.plainText.isEmpty() && !body.html.isEmpty()) {
+            body.plainText = htmlToPlainText(body.html);
+        }
+
+        return body;
+    }
+
+    /**
+     * Decode content theo encoding
+     */
+    private static String decodeContent(String content, String encoding) {
+        if (content == null || content.isEmpty()) return "";
+
+        try {
+            switch (encoding.toLowerCase()) {
+                case "base64":
+                    StringBuilder cleanBase64 = new StringBuilder(
+                            content.replaceAll("[\r\n]+", "").replaceAll("\\s+", "")
+                    );
+                    while (cleanBase64.length() % 4 != 0) {
+                        cleanBase64.append("=");
+                    }
+                    if (isValidBase64(cleanBase64.toString())) {
+                        byte[] decodedBytes = Base64.getDecoder().decode(cleanBase64.toString());
+                        return new String(decodedBytes, StandardCharsets.UTF_8);
+                    }
+                    break;
+
+                case "quoted-printable":
+                    return decodeQuotedPrintable(content);
+
+                default:
+                    return content.trim();
+            }
+        } catch (Exception e) {
+            logger.error("Decode error: {}", e.getMessage());
+        }
+
+        return content.trim();
     }
 
     /**
@@ -340,10 +360,12 @@ public class ImapParser {
      * Detect encoding cho part cụ thể (tìm trong full response gần part)
      */
     private static String detectEncodingForPart(String response, String rawBody) {
-        // Tìm encoding gần rawBody position
         int startPos = response.indexOf(rawBody);
         if (startPos == -1) startPos = 0;
-        String context = response.substring(Math.max(0, startPos - 200), startPos + 200);
+
+        int contextStart = Math.max(0, startPos - 200);
+        int contextEnd = Math.min(response.length(), startPos + 200);
+        String context = response.substring(contextStart, contextEnd);
 
         Pattern encPattern = Pattern.compile("Content-Transfer-Encoding:\\s*([a-zA-Z0-9-]+)", Pattern.CASE_INSENSITIVE);
         Matcher matcher = encPattern.matcher(context);
