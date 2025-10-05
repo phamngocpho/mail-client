@@ -13,6 +13,8 @@ public class Email {
     private List<String> cc;
     private String subject;
     private String body;
+    private String bodyHtml;
+    private boolean isHtml;
     private Date date;
     private List<String> flags;
     private int size;
@@ -103,6 +105,22 @@ public class Email {
 
     public void setBody(String body) {
         this.body = body;
+    }
+
+    public String getBodyHtml() {
+        return bodyHtml;
+    }
+
+    public void setBodyHtml(String bodyHtml) {
+        this.bodyHtml = bodyHtml;
+    }
+
+    public boolean isHtml() {
+        return isHtml;
+    }
+
+    public void setHtml(boolean html) {
+        isHtml = html;
     }
 
     public Date getDate() {

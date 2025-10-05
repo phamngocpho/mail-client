@@ -2,6 +2,7 @@ package controllers;
 
 import components.panels.dashboard.Inbox;
 import models.Email;
+import protocols.imap.ImapParser;
 import raven.toast.Notifications;
 import services.ImapService;
 
@@ -30,7 +31,7 @@ public class ImapController {
         imapService.connect(host, email, password);
 
         // Fetch emails from INBOX
-        List<Email> emails = imapService.fetchRecentEmails(currentFolder, 10);
+        List<Email> emails = imapService.fetchRecentEmails(currentFolder, 30);
 
         // Update UI on EDT
         SwingUtilities.invokeLater(() -> {
@@ -54,7 +55,7 @@ public class ImapController {
                 imapService.connect(host, email, password);
 
                 // Fetch emails from INBOX
-                return imapService.fetchRecentEmails(currentFolder, 10);
+                return imapService.fetchRecentEmails(currentFolder, 30);
             }
 
             @Override
@@ -101,7 +102,7 @@ public class ImapController {
      * Refresh current folder
      */
     public void refresh() {
-        loadFolder(currentFolder, 10);
+        loadFolder(currentFolder, 30);
     }
 
     /**
@@ -133,18 +134,19 @@ public class ImapController {
      * Load email body khi user click vào email
      */
     public void loadEmailBody(Email email, String folderName) {
-        SwingWorker<String, Void> worker = new SwingWorker<>() {
+        SwingWorker<ImapParser.EmailBody, Void> worker = new SwingWorker<>() {
             @Override
-            protected String doInBackground() throws Exception {
+            protected ImapParser.EmailBody doInBackground() throws Exception {
                 return imapService.fetchEmailBody(folderName, email.getMessageNumber());
             }
 
             @Override
             protected void done() {
                 try {
-                    String body = get();
-                    email.setBody(body);
-                    // Trigger UI update
+                    ImapParser.EmailBody emailBody = get();
+                    email.setBody(emailBody.plainText);
+                    email.setBodyHtml(emailBody.html);
+                    email.setHtml(!emailBody.html.isEmpty());
                     inboxPanel.updateEmailBody(email);
                 } catch (Exception e) {
                     showError("Failed to load email body: " + e.getMessage());

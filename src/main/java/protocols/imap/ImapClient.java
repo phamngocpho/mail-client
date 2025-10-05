@@ -140,7 +140,7 @@ public class ImapClient {
     /**
      * Fetch body của một email cụ thể
      */
-    public String fetchEmailBody(int messageNumber) throws ImapException {
+    public ImapParser.EmailBody fetchEmailBody(int messageNumber) throws ImapException {
         if (selectedFolder == null) {
             throw new ImapException("No folder selected");
         }
@@ -286,7 +286,10 @@ public class ImapClient {
                 int msgNum = extractMessageNumber(block);
                 if (msgNum > 0) {
                     Email email = ImapParser.parseEmailFromFetch(block, msgNum);
-                    email.setBody(ImapParser.parseEmailBody(block));
+                    ImapParser.EmailBody emailBody = ImapParser.parseEmailBody(block);
+                    email.setBody(emailBody.plainText);
+                    email.setBodyHtml(emailBody.html);
+                    email.setHtml(!emailBody.html.isEmpty());
                     emails.add(email);
                 }
             }

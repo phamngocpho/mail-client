@@ -4,6 +4,7 @@ import models.Email;
 import models.Folder;
 import protocols.imap.ImapClient;
 import protocols.imap.ImapException;
+import protocols.imap.ImapParser;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -114,13 +115,12 @@ public class ImapService {
     /**
      * Fetch body của email cụ thể
      */
-    public String fetchEmailBody(String folderName, int messageNumber) throws ImapException {
+    public ImapParser.EmailBody fetchEmailBody(String folderName, int messageNumber) throws ImapException {
         if (!isConnected) {
             throw new ImapException("Not connected. Call connect() first.");
         }
 
         try {
-            // Ensure folder is selected
             if (!folderName.equals(client.getSelectedFolder())) {
                 client.selectFolder(folderName);
             }
