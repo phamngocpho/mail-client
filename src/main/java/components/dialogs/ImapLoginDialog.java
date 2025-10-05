@@ -1,14 +1,21 @@
 package components.dialogs;
 
 import com.formdev.flatlaf.FlatClientProperties;
+import components.notifications.popup.GlassPanePopup;
+import components.notifications.popup.component.SimplePopupBorder;
 import controllers.ImapController;
+import controllers.SmtpController;
 import net.miginfocom.swing.MigLayout;
+import raven.toast.Notifications;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.DataFlavor;
+import java.util.Objects;
 
 /**
  * Dialog để nhập thông tin IMAP và kết nối
+ * Tự động configure SMTP với cùng credentials
  */
 public class ImapLoginDialog extends JDialog {
     private JTextField hostField;
@@ -16,16 +23,15 @@ public class ImapLoginDialog extends JDialog {
     private JPasswordField passwordField;
     private JComboBox<String> providerCombo;
     private JButton connectButton;
-    private JButton cancelButton;
 
-    private ImapController controller;
+    private final ImapController imapController;
     private boolean connected = false;
 
     public ImapLoginDialog(Frame parent, ImapController controller) {
         super(parent, "Connect to Email Server", true);
-        this.controller = controller;
+        this.imapController = controller;
         initComponents();
-        setSize(450, 300);
+        setSize(new Dimension(550, 450));
         setLocationRelativeTo(parent);
     }
 
@@ -34,7 +40,6 @@ public class ImapLoginDialog extends JDialog {
 
         // Title
         JLabel titleLabel = new JLabel("Email Server Configuration");
-        titleLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +4");
         add(titleLabel, "span, wrap");
 
         // Provider selection
@@ -64,7 +69,8 @@ public class ImapLoginDialog extends JDialog {
 
         // Info label
         JLabel infoLabel = new JLabel("<html><i>For Gmail: Use App Password<br>" +
-                "Generate at: myaccount.google.com/apppasswords</i></html>");
+                "Generate at: myaccount.google.com/apppasswords<br>" +
+                "<b>Note:</b> This will configure both IMAP (read) and SMTP (send)</i></html>");
         infoLabel.setForeground(Color.GRAY);
         add(infoLabel, "span, wrap");
 
@@ -76,7 +82,7 @@ public class ImapLoginDialog extends JDialog {
                 FlatClientProperties.BUTTON_TYPE_BORDERLESS);
         connectButton.addActionListener(e -> connect());
 
-        cancelButton = new JButton("Cancel");
+        JButton cancelButton = new JButton("Cancel");
         cancelButton.addActionListener(e -> dispose());
 
         buttonPanel.add(new JLabel(), "grow"); // Spacer
@@ -91,7 +97,7 @@ public class ImapLoginDialog extends JDialog {
 
     private void updateHostField() {
         String provider = (String) providerCombo.getSelectedItem();
-        switch (provider) {
+        switch (Objects.requireNonNull(provider)) {
             case "Gmail":
                 hostField.setText("imap.gmail.com");
                 passwordField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT,
@@ -122,10 +128,8 @@ public class ImapLoginDialog extends JDialog {
 
         // Validate
         if (host.isEmpty() || email.isEmpty() || password.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "Please fill in all fields",
-                    "Validation Error",
-                    JOptionPane.WARNING_MESSAGE);
+
+            Notifications.getInstance().show(Notifications.Type.WARNING, Notifications.Location.TOP_CENTER, "Please fill in all fields");
             return;
         }
 
@@ -137,7 +141,13 @@ public class ImapLoginDialog extends JDialog {
         SwingWorker<Void, Void> worker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() throws Exception {
-                controller.connect(host, email, password);
+                // Connect IMAP
+                imapController.connect(host, email, password);
+
+                // Auto-configure SMTP với cùng credentials
+                SmtpController smtpController = SmtpController.getInstance();
+                smtpController.configureFromImap(host, email, password);
+
                 return null;
             }
 
@@ -146,12 +156,12 @@ public class ImapLoginDialog extends JDialog {
                 try {
                     get(); // Check for exceptions
                     connected = true;
+
+                    Notifications.getInstance().show(Notifications.Type.SUCCESS, Notifications.Location.TOP_CENTER, "Connected successfully! Both IMAP and SMTP are configured.");
+
                     dispose();
                 } catch (Exception e) {
-                    JOptionPane.showMessageDialog(ImapLoginDialog.this,
-                            "Connection failed: " + e.getMessage(),
-                            "Connection Error",
-                            JOptionPane.ERROR_MESSAGE);
+                    Notifications.getInstance().show(Notifications.Type.ERROR, "Connection failed: " + e.getMessage());
                     connectButton.setEnabled(true);
                     connectButton.setText("Connect");
                 }

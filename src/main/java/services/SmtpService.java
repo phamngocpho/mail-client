@@ -5,7 +5,7 @@ import protocols.smtp.SmtpException;
 import protocols.smtp.SmtpSender;
 
 public class SmtpService {
-    private SmtpSender sender;
+    private final SmtpSender sender;
     private String currentHost;
     private String currentUser;
     private boolean isConnected = false;

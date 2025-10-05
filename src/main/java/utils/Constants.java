@@ -9,7 +9,7 @@ public class Constants {
     // SMTP Configuration
     public static final int SMTP_SSL_PORT = 465;
     public static final int SMTP_TLS_PORT = 587;
-    public static final int SMTP_PORT = 25;
+    public static final int SMTP_PORT = 2;
 
     // Timeouts
     public static final int SOCKET_TIMEOUT = 30000; // 30 seconds
@@ -38,9 +38,9 @@ public class Constants {
     public static final String IMAP_NO = "NO";
     public static final String IMAP_BAD = "BAD";
 
-    public static final int SMTP_READY = 220;
-    public static final int SMTP_OK = 250;
-    public static final int SMTP_AUTH_CONTINUE = 334;
-    public static final int SMTP_START_MAIL = 354;
-    public static final int SMTP_CLOSING = 221;
+    public static final String SMTP_READY = "220";
+    public static final String SMTP_OK = "250";
+    public static final String SMTP_AUTH_CONTINUE = "334";
+    public static final String SMTP_START_MAIL = "354";
+    public static final String SMTP_CLOSING = "221";
 }

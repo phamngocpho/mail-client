@@ -2,6 +2,7 @@ package controllers;
 
 import components.panels.dashboard.Inbox;
 import models.Email;
+import raven.toast.Notifications;
 import services.ImapService;
 
 import javax.swing.*;
@@ -42,7 +43,6 @@ public class ImapController {
                 try {
                     List<Email> emails = get();
                     inboxPanel.loadEmails(emails);
-
                     System.out.println("✓ Connected successfully! Loaded " + emails.size() + " emails.");
                 } catch (Exception e) {
                     showError("Failed to connect: " + e.getMessage());
@@ -154,11 +154,6 @@ public class ImapController {
      * Show error dialog
      */
     private void showError(String message) {
-        JOptionPane.showMessageDialog(
-                inboxPanel,
-                message,
-                "Error",
-                JOptionPane.ERROR_MESSAGE
-        );
+        Notifications.getInstance().show(Notifications.Type.ERROR, message);
     }
 }
