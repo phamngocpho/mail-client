@@ -46,7 +46,8 @@ public class MainMenu extends JPanel {
         add(header, "wrap, growx");
 
         // Compose button
-        JButton composeBtn = createComposeButton();
+        JPanel composeContent = new Compose();
+        JButton composeBtn = createComposeButton(composeContent);
         add(composeBtn, "wrap, gapx 15 15, gapy 10 10");
 
         // Scrollable content
@@ -88,11 +89,17 @@ public class MainMenu extends JPanel {
         return header;
     }
 
-    private JButton createComposeButton() {
+    private JButton createComposeButton(JPanel composeContent) {
         JButton btn = new JButton("Compose", new FlatSVGIcon("icons/menu/compose.svg", Value.defaultIconSize, Value.defaultIconSize));
         btn.setPreferredSize(new Dimension(150, 48));
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btn.setFocusPainted(false);
+
+        btn.addActionListener(e -> {
+            if (clickListener != null) {
+                clickListener.onMenuItemClicked(composeContent);
+            }
+        });
 
         return btn;
     }

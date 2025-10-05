@@ -4,7 +4,6 @@ import models.Email;
 import utils.Constants;
 import utils.NetworkUtils;
 
-import javax.net.ssl.SSLSocket;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -45,7 +44,7 @@ public class SmtpSender {
             String greeting = readResponse();
             System.out.println("← " + greeting);
 
-            if (!greeting.startsWith("220")) {
+            if (!greeting.startsWith(Constants.SMTP_READY)) {
                 throw new SmtpException("Invalid server greeting: " + greeting);
             }
 
@@ -79,7 +78,7 @@ public class SmtpSender {
         writer.println(command);
 
         String response = readMultilineResponse();
-        if (!response.startsWith("250")) {
+        if (!response.startsWith(Constants.SMTP_OK)) {
             throw new SmtpException(command, response, "EHLO failed");
         }
         System.out.println("✓ EHLO successful");
@@ -90,20 +89,19 @@ public class SmtpSender {
      */
     private void startTLS(String host) throws SmtpException {
         try {
-            String command = "STARTTLS";
+            String command = Constants.SMTP_STARTTLS;
             System.out.println("→ " + command);
             writer.println(command);
 
             String response = readResponse();
             System.out.println("← " + response);
 
-            if (!response.startsWith("220")) {
+            if (!response.startsWith(Constants.SMTP_READY)) {
                 throw new SmtpException(command, response, "STARTTLS failed");
             }
 
             // Upgrade socket to TLS
-            SSLSocket sslSocket = NetworkUtils.upgradeToTLS(socket, host);
-            socket = sslSocket;
+            socket = NetworkUtils.upgradeToTLS(socket, host);
             reader = NetworkUtils.createReader(socket);
             writer = NetworkUtils.createWriter(socket);
 
@@ -126,14 +124,14 @@ public class SmtpSender {
 
         try {
             // AUTH LOGIN
-            String command = "AUTH LOGIN";
+            String command = Constants.SMTP_AUTH_LOGIN;
             System.out.println("→ " + command);
             writer.println(command);
 
             String response = readResponse();
             System.out.println("← " + response);
 
-            if (!response.startsWith("334")) {
+            if (!response.startsWith(Constants.SMTP_AUTH_CONTINUE)) {
                 throw new SmtpException(command, response, "AUTH LOGIN not accepted");
             }
 
@@ -186,7 +184,7 @@ public class SmtpSender {
 
             String response = readResponse();
             System.out.println("← " + response);
-            if (!response.startsWith("250")) {
+            if (!response.startsWith(Constants.SMTP_OK)) {
                 throw new SmtpException(mailFrom, response, "MAIL FROM rejected");
             }
 
@@ -198,7 +196,7 @@ public class SmtpSender {
 
                 response = readResponse();
                 System.out.println("← " + response);
-                if (!response.startsWith("250")) {
+                if (!response.startsWith(Constants.SMTP_OK)) {
                     throw new SmtpException(rcptTo, response, "RCPT TO rejected: " + to);
                 }
             }
@@ -209,7 +207,7 @@ public class SmtpSender {
 
             response = readResponse();
             System.out.println("← " + response);
-            if (!response.startsWith("354")) {
+            if (!response.startsWith(Constants.SMTP_START_MAIL)) {
                 throw new SmtpException("DATA", response, "DATA command rejected");
             }
 
@@ -222,7 +220,7 @@ public class SmtpSender {
 
             response = readResponse();
             System.out.println("← " + response);
-            if (!response.startsWith("250")) {
+            if (!response.startsWith(Constants.SMTP_OK)) {
                 throw new SmtpException("Email rejected by server");
             }
 
@@ -314,13 +312,13 @@ public class SmtpSender {
             if (writer != null) writer.close();
             if (socket != null) socket.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println(e.getMessage());
         }
         connected = false;
         authenticated = false;
     }
 
-    // ==================== Helper Methods ====================
+    // Helper Methods
 
     private String readResponse() throws SmtpException {
         try {
