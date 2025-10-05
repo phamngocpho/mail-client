@@ -1,6 +1,8 @@
 package protocols.imap;
 
 import models.Email;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
@@ -10,6 +12,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class ImapParser {
+    private static final Logger logger = LoggerFactory.getLogger(ImapParser.class);
 
     /**
      * Parse email từ FETCH response
@@ -194,7 +197,7 @@ public class ImapParser {
                 } catch (Exception ignored) {}
             }
         } catch (Exception e) {
-            System.err.println(e.getMessage());
+            logger.error("Error parsing date: {}", dateStr);
         }
         return new Date(); // Fallback to current date
     }
@@ -231,7 +234,7 @@ public class ImapParser {
                         byte[] decodedBytes = Base64.getDecoder().decode(cleanBase64.toString());
                         decodedBody = new String(decodedBytes, StandardCharsets.UTF_8);
                     } else {
-                        System.err.println("Invalid base64 detected, skipping decode.");
+                        logger.error("Invalid base64 detected, skipping decode.");
                         decodedBody = rawBody.trim();
                     }
                     break;
@@ -258,7 +261,7 @@ public class ImapParser {
             }
 
         } catch (Exception e) {
-            System.err.println("Body parse error: " + e.getMessage());
+            logger.error("Body parse error: {}", e.getMessage());
             decodedBody = rawBody.trim();  // Fallback
         }
 

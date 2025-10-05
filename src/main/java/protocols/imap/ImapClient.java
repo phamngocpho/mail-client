@@ -2,6 +2,8 @@ package protocols.imap;
 
 import models.Email;
 import models.Folder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import utils.Constants;
 import utils.NetworkUtils;
 
@@ -20,6 +22,7 @@ public class ImapClient {
     private boolean connected = false;
     private boolean authenticated = false;
     private String selectedFolder = null;
+    private static final Logger logger = LoggerFactory.getLogger(ImapClient.class);
 
     /**
      * Connect to IMAP server với SSL
@@ -217,7 +220,7 @@ public class ImapClient {
             if (writer != null) writer.close();
             if (socket != null) socket.close();
         } catch (IOException e) {
-            System.err.println(e.getMessage());
+            logger.error("Error while closing connection", e);
         }
         connected = false;
         authenticated = false;
