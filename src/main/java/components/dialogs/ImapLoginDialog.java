@@ -141,8 +141,7 @@ public class ImapLoginDialog extends JDialog {
         SwingWorker<Void, Void> worker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() throws Exception {
-                // Connect IMAP
-                imapController.connect(host, email, password);
+                imapController.connectSync(host, email, password);
 
                 // Auto-configure SMTP với cùng credentials
                 SmtpController smtpController = SmtpController.getInstance();
@@ -154,7 +153,7 @@ public class ImapLoginDialog extends JDialog {
             @Override
             protected void done() {
                 try {
-                    get(); // Check for exceptions
+                    get(); // Check for exceptions - Nếu sai mật khẩu, exception sẽ throw ở đây
                     connected = true;
 
                     Notifications.getInstance().show(Notifications.Type.SUCCESS, Notifications.Location.TOP_CENTER, "Connected successfully! Both IMAP and SMTP are configured.");

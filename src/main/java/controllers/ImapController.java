@@ -22,7 +22,26 @@ public class ImapController {
     }
 
     /**
-     * Connect to IMAP server và load emails
+     * Connect to IMAP server và load emails (synchronous version)
+     * Dùng khi gọi từ background thread
+     */
+    public void connectSync(String host, String email, String password) throws Exception {
+        // Connect to IMAP
+        imapService.connect(host, email, password);
+
+        // Fetch emails from INBOX
+        List<Email> emails = imapService.fetchRecentEmails(currentFolder, 10);
+
+        // Update UI on EDT
+        SwingUtilities.invokeLater(() -> {
+            inboxPanel.loadEmails(emails);
+            System.out.println("✓ Connected successfully! Loaded " + emails.size() + " emails.");
+        });
+    }
+
+    /**
+     * Connect to IMAP server và load emails (asynchronous version)
+     * Dùng khi gọi từ UI thread
      */
     public void connect(String host, String email, String password) {
         // Show loading state
