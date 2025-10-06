@@ -7,6 +7,7 @@ import utils.Constants;
 import utils.NetworkUtils;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.Socket;
@@ -246,45 +247,79 @@ public class SmtpSender {
     /**
      * Send email content (headers + body)
      */
-    private void sendEmailContent(Email email) {
-        // Date header
+    private void sendEmailContent(Email email) throws IOException {
         SimpleDateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z", Locale.ENGLISH);
         writer.println("Date: " + dateFormat.format(email.getDate() != null ? email.getDate() : new Date()));
-
-        // From header
         writer.println("From: " + email.getFrom());
-
-        // To header
         writer.println("To: " + String.join(", ", email.getTo()));
-
-        // CC header (if any)
         if (email.getCc() != null && !email.getCc().isEmpty()) {
             writer.println("Cc: " + String.join(", ", email.getCc()));
         }
-
-        // Subject header
         writer.println("Subject: " + (email.getSubject() != null ? email.getSubject() : "(No Subject)"));
-
-        // MIME headers
         writer.println("MIME-Version: 1.0");
-        writer.println("Content-Type: text/plain; charset=UTF-8");
-        writer.println("Content-Transfer-Encoding: 8bit");
 
-        // Empty line between headers and body
-        writer.println();
+        // Nếu có file đính kèm
+        if (email.getAttachments() != null && !email.getAttachments().isEmpty()) {
+            String boundary = "BOUNDARY_" + System.currentTimeMillis();
+            writer.println("Content-Type: multipart/mixed; boundary=\"" + boundary + "\"");
+            writer.println();
+            writer.println("This is a multipart message in MIME format.");
+            writer.println();
 
-        // Body
-        String body = email.getBody() != null ? email.getBody() : "";
-        // Escape lines starting with . (SMTP stuffing)
-        String[] lines = body.split("\r?\n");
-        for (String line : lines) {
-            if (line.startsWith(".")) {
-                writer.println("." + line);
-            } else {
-                writer.println(line);
+            // ---- Phần body (text)
+            writer.println("--" + boundary);
+            writer.println("Content-Type: text/plain; charset=UTF-8");
+            writer.println("Content-Transfer-Encoding: 8bit");
+            writer.println();
+            String body = email.getBody() != null ? email.getBody() : "";
+            for (String line : body.split("\r?\n")) {
+                if (line.startsWith(".")) writer.println("." + line);
+                else writer.println(line);
+            }
+            writer.println();
+
+            // ---- Các phần file đính kèm
+            for (File file : email.getAttachments()) {
+                writer.println("--" + boundary);
+                writer.println("Content-Type: application/octet-stream; name=\"" + file.getName() + "\"");
+                writer.println("Content-Transfer-Encoding: base64");
+                writer.println("Content-Disposition: attachment; filename=\"" + file.getName() + "\"");
+                writer.println();
+
+                // Gửi nội dung file (base64)
+                sendFileAsBase64(file);
+                writer.println();
+            }
+
+            // Kết thúc multipart
+            writer.println("--" + boundary + "--");
+
+        } else {
+            // Không có file đính kèm → gửi text bình thường
+            writer.println("Content-Type: text/plain; charset=UTF-8");
+            writer.println("Content-Transfer-Encoding: 8bit");
+            writer.println();
+            String body = email.getBody() != null ? email.getBody() : "";
+            for (String line : body.split("\r?\n")) {
+                if (line.startsWith(".")) writer.println("." + line);
+                else writer.println(line);
             }
         }
     }
+
+    private void sendFileAsBase64(File file) throws IOException {
+        try (java.io.FileInputStream fis = new java.io.FileInputStream(file)) {
+            byte[] buffer = new byte[57]; // 57 bytes → 76 ký tự base64 (chuẩn MIME)
+            int bytesRead;
+            while ((bytesRead = fis.read(buffer)) != -1) {
+                String encoded = java.util.Base64.getEncoder()
+                        .encodeToString(java.util.Arrays.copyOf(buffer, bytesRead));
+                writer.println(encoded);
+            }
+        }
+    }
+
+
 
     /**
      * Quit và đóng kết nối
