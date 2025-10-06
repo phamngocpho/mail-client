@@ -18,15 +18,9 @@ public class Value {
     public static Color sky_blue = Color.decode("#38bdf8");
     public static Color deep_blue = Color.decode("#2a84ff");
     public static Color dark_gray = Color.decode("#282828");
-    public static Color message_left = Color.decode("#303030");
-    public static Color message_right = Color.decode("#1371ff");
-    public static Color unsent_message = Color.decode("#8b8c90");
     public static Color sent_time = Color.decode("#686868");
     public static Color white = Color.decode("#ffffff");
-    public static final String url = "jdbc:sqlserver://localhost:1433;" + "databaseName=Application;" + "user=sa;" + "password=160;" + "encrypt=true;" + "trustServerCertificate=true";
     public static final String resources = System.getProperty("user.dir") + "/src/main/resources/";
-    public static final int PORT = 1234;
-    public static final String SERVER = "administrator";
     public static final String DateTimeFormat = "dd/MM/yyyy";
     public static final Font systemFont = (Font) Toolkit.getDefaultToolkit().getDesktopProperty("win.messagebox.font");
 
