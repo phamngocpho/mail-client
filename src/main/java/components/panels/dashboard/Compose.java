@@ -5,9 +5,12 @@ import controllers.SmtpController;
 import models.Email;
 import net.miginfocom.swing.MigLayout;
 import raven.toast.Notifications;
+import values.Value;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
 
 public class Compose extends JPanel {
     private JTextField toField;
@@ -39,7 +42,7 @@ public class Compose extends JPanel {
 
     private void init() {
         setLayout(new MigLayout(
-                "fillx,insets 0",
+                "fillx,insets 10",
                 "[grow,fill]",
                 "[][][][][][] [grow,fill] []"
         ));
@@ -49,7 +52,8 @@ public class Compose extends JPanel {
         JPanel toPanel = createFieldPanel("To", true);
         toField = new JTextField();
         toField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Search or add a contact");
-        toPanel.add(toField, "growx,pushx");
+        toField.putClientProperty(FlatClientProperties.STYLE, "arc: 30");
+        toPanel.add(toField, "growx,pushx, h 25!");
 
         // CC/BCC labels
         JPanel ccBccPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
@@ -81,7 +85,8 @@ public class Compose extends JPanel {
         ccPanel = createFieldPanel("CC", false);
         ccField = new JTextField();
         ccField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Add CC recipients");
-        ccPanel.add(ccField, "growx");
+        ccField.putClientProperty(FlatClientProperties.STYLE, "arc: 30");
+        ccPanel.add(ccField, "growx, h 25!");
         ccPanel.setVisible(false);
         add(ccPanel, "wrap,growx");
 
@@ -89,7 +94,8 @@ public class Compose extends JPanel {
         bccPanel = createFieldPanel("BCC", false);
         bccField = new JTextField();
         bccField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Add BCC recipients");
-        bccPanel.add(bccField, "growx");
+        bccField.putClientProperty(FlatClientProperties.STYLE, "arc: 30");
+        bccPanel.add(bccField, "growx, h 25!");
         bccPanel.setVisible(false);
         add(bccPanel, "wrap,growx");
 
@@ -97,12 +103,14 @@ public class Compose extends JPanel {
         JPanel subjectPanel = createFieldPanel("Subject", false);
         subjectField = new JTextField();
         subjectField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Add a subject");
-        subjectPanel.add(subjectField, "growx");
+        subjectField.putClientProperty(FlatClientProperties.STYLE, "arc: 30");
+        subjectPanel.add(subjectField, "growx, h 25!");
         add(subjectPanel, "wrap,growx");
 
         // From field
         JPanel fromPanel = createFieldPanel("From", false);
         fromCombo = new JComboBox<>(new String[]{getDefaultEmail()});
+        fromCombo.setBackground(Value.dark_gray);
 
         JLabel avatarLabel = new JLabel();
         avatarLabel.setPreferredSize(new Dimension(32, 32));
@@ -118,9 +126,11 @@ public class Compose extends JPanel {
         bodyArea = new JTextArea();
         bodyArea.setLineWrap(true);
         bodyArea.setWrapStyleWord(true);
+        bodyArea.putClientProperty(FlatClientProperties.STYLE, "margin: 10,10,10,10");
         bodyArea.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Write your message here...");
 
         JScrollPane scrollPane = new JScrollPane(bodyArea);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
         add(scrollPane, "wrap,grow,pushy");
 
         // Bottom toolbar
@@ -236,7 +246,7 @@ public class Compose extends JPanel {
                 } finally {
                     if (sendBtn != null) {
                         sendBtn.setEnabled(true);
-                        sendBtn.setText("✉ Send");
+                        sendBtn.setText("Send");
                     }
                 }
             }
