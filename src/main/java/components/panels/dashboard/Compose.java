@@ -1,5 +1,6 @@
 package components.panels.dashboard;
 import com.formdev.flatlaf.FlatClientProperties;
+import com.formdev.flatlaf.extras.FlatSVGIcon;
 import com.formdev.flatlaf.themes.FlatMacDarkLaf;
 import controllers.SmtpController;
 import models.Email;
@@ -11,6 +12,9 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Compose extends JPanel {
     private JTextField toField;
@@ -25,6 +29,11 @@ public class Compose extends JPanel {
     private JTextField bccField;
     private boolean ccVisible = false;
     private boolean bccVisible = false;
+    private JPanel attachmentPanel;
+
+    private final List<File> attachments = new ArrayList<>();
+
+
 
     private SmtpController controller;
 
@@ -133,6 +142,11 @@ public class Compose extends JPanel {
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
         add(scrollPane, "wrap,grow,pushy");
 
+        // Attachment panel (hiển thị file đính kèm)
+        attachmentPanel = new JPanel(new MigLayout("wrap 1", "[grow]", "[]"));
+        attachmentPanel.setOpaque(false);
+        add(attachmentPanel, "wrap,growx");
+
         // Bottom toolbar
         add(createToolbarPanel(), "growx,h 60!");
     }
@@ -172,10 +186,17 @@ public class Compose extends JPanel {
         sendBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, "roundRect");
         sendBtn.addActionListener(e -> sendEmail());
 
+        JButton attachBtn = new JButton();
+        attachBtn.setIcon(new FlatSVGIcon("icons/attach.svg",25, 25));
+        attachBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        attachBtn.setToolTipText("Attach file");
+        attachBtn.addActionListener(e -> chooseAttachment());
+
         JButton dropdownBtn = new JButton("▼");
         dropdownBtn.setFocusPainted(false);
         dropdownBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
+        panel.add(attachBtn);
         panel.add(sendBtn, "split 2,gap 0");
         panel.add(dropdownBtn, "gap 2");
 
@@ -300,6 +321,9 @@ public class Compose extends JPanel {
                 }
             }
         }
+        for (File file : attachments) {
+            email.addAttachment(file);
+        }
 
         email.setSubject(subjectField.getText().trim());
         email.setBody(bodyArea.getText());
@@ -319,6 +343,8 @@ public class Compose extends JPanel {
         bccVisible = false;
         revalidate();
         repaint();
+        attachments.clear();
+        attachmentPanel.removeAll();
     }
 
     private JButton findSendButton() {
@@ -337,6 +363,47 @@ public class Compose extends JPanel {
         }
         return null;
     }
+
+    private void chooseAttachment() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setMultiSelectionEnabled(true);
+        int result = fileChooser.showOpenDialog(this);
+
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File[] selectedFiles = fileChooser.getSelectedFiles();
+            for (File f : selectedFiles) {
+                attachments.add(f);
+                addAttachmentToPanel(f);
+            }
+            revalidate();
+            repaint();
+        }
+    }
+
+    private void addAttachmentToPanel(File file) {
+        JPanel fileItem = new JPanel(new MigLayout("insets 5, fillx", "[grow][]"));
+        fileItem.setBackground(new Color(40, 40, 40));
+        fileItem.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+
+        JLabel nameLabel = new JLabel("📄 " + file.getName());
+        nameLabel.setForeground(Color.WHITE);
+
+        JButton removeBtn = new JButton("❌");
+        removeBtn.setFocusPainted(false);
+        removeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        removeBtn.addActionListener(e -> {
+            attachments.remove(file);
+            attachmentPanel.remove(fileItem);
+            revalidate();
+            repaint();
+        });
+
+        fileItem.add(nameLabel, "growx");
+        fileItem.add(removeBtn);
+        attachmentPanel.add(fileItem, "growx, wrap");
+    }
+
+
 
     private String getDefaultEmail() {
         if (controller.isConfigured()) {

@@ -1,5 +1,6 @@
 package models;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -18,11 +19,13 @@ public class Email {
     private Date date;
     private List<String> flags;
     private int size;
+    private List<File> attachments;
 
     public Email() {
         this.to = new ArrayList<>();
         this.cc = new ArrayList<>();
         this.flags = new ArrayList<>();
+        this.attachments = new ArrayList<>();
     }
 
     public Email(String from, String to, String subject, String body) {
@@ -168,6 +171,19 @@ public class Email {
     public void setSize(int size) {
         this.size = size;
     }
+
+    public List<File> getAttachments() {
+        return attachments;
+    }
+
+    public void addAttachment(File file) {
+        attachments.add(file);
+    }
+
+    public void setAttachments(List<File> attachments) {
+        this.attachments = attachments;
+    }
+
 
     @Override
     public String toString() {
