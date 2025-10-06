@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import protocols.imap.ImapParser;
 import raven.toast.Notifications;
+import utils.ConfigUtils;
 import values.Value;
 
 import javax.swing.*;
@@ -62,14 +63,14 @@ public class ImapLoginDialog extends JDialog {
         // Email
         add(new JLabel("Email:"), "");
         emailField = new JTextField();
-        emailField.setText("phopn.23it@vku.udn.vn");
+        emailField.setText(ConfigUtils.getEmail());
         emailField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "your.email@example.com");
         add(emailField, "growx, wrap");
 
         // Password
         add(new JLabel("Password:"), "");
         passwordField = new JPasswordField();
-        passwordField.setText(Value.app_password);
+        passwordField.setText(ConfigUtils.getAppPassword());
         passwordField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "App Password for Gmail");
         add(passwordField, "growx, wrap");
 
