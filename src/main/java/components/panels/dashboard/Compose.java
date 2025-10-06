@@ -2,7 +2,9 @@ package components.panels.dashboard;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 import com.formdev.flatlaf.themes.FlatMacDarkLaf;
+import com.formdev.flatlaf.ui.FlatLineBorder;
 import controllers.SmtpController;
+import jnafilechooser.api.JnaFileChooser;
 import models.Email;
 import net.miginfocom.swing.MigLayout;
 import raven.toast.Notifications;
@@ -10,19 +12,17 @@ import values.Value;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.FocusEvent;
-import java.awt.event.FocusListener;
+import java.awt.event.ActionListener;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
 public class Compose extends JPanel {
     private JTextField toField;
     private JTextField subjectField;
     private JTextArea bodyArea;
     private JComboBox<String> fromCombo;
-    private JLabel ccLabel;
-    private JLabel bccLabel;
     private JPanel ccPanel;
     private JPanel bccPanel;
     private JTextField ccField;
@@ -32,6 +32,7 @@ public class Compose extends JPanel {
     private JPanel attachmentPanel;
 
     private final List<File> attachments = new ArrayList<>();
+    private final int iconSize = Value.defaultIconSize - 2;
 
 
 
@@ -65,27 +66,7 @@ public class Compose extends JPanel {
         toPanel.add(toField, "growx,pushx, h 25!");
 
         // CC/BCC labels
-        JPanel ccBccPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        ccBccPanel.setOpaque(false);
-
-        ccLabel = new JLabel("CC");
-        ccLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        ccLabel.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseClicked(java.awt.event.MouseEvent evt) {
-                toggleCc();
-            }
-        });
-
-        bccLabel = new JLabel("BCC");
-        bccLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        bccLabel.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseClicked(java.awt.event.MouseEvent evt) {
-                toggleBcc();
-            }
-        });
-
-        ccBccPanel.add(ccLabel);
-        ccBccPanel.add(bccLabel);
+        JPanel ccBccPanel = getCcBccPanel();
         toPanel.add(ccBccPanel);
 
         add(toPanel, "wrap,growx");
@@ -135,12 +116,16 @@ public class Compose extends JPanel {
         bodyArea = new JTextArea();
         bodyArea.setLineWrap(true);
         bodyArea.setWrapStyleWord(true);
-        bodyArea.putClientProperty(FlatClientProperties.STYLE, "margin: 10,10,10,10");
+        bodyArea.setOpaque(false);
         bodyArea.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Write your message here...");
+        bodyArea.setBorder(BorderFactory.createCompoundBorder(
+                new FlatLineBorder(new Insets(1, 1, 1, 1), UIManager.getColor("Component.borderColor"), 1, 20),
+                BorderFactory.createEmptyBorder(12, 12, 12, 12)
+        ));
 
         JScrollPane scrollPane = new JScrollPane(bodyArea);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
-        add(scrollPane, "wrap,grow,pushy");
+        add(scrollPane, "wrap,grow,push");
 
         // Attachment panel (hiển thị file đính kèm)
         attachmentPanel = new JPanel(new MigLayout("wrap 1", "[grow]", "[]"));
@@ -149,6 +134,32 @@ public class Compose extends JPanel {
 
         // Bottom toolbar
         add(createToolbarPanel(), "growx,h 60!");
+        setBorder(BorderFactory.createMatteBorder(0, 2, 0, 0, Value.dark_gray));
+    }
+
+    private JPanel getCcBccPanel() {
+        JPanel ccBccPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        ccBccPanel.setOpaque(false);
+
+        JLabel ccLabel = new JLabel("CC");
+        ccLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        ccLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                toggleCc();
+            }
+        });
+
+        JLabel bccLabel = new JLabel("BCC");
+        bccLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        bccLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                toggleBcc();
+            }
+        });
+
+        ccBccPanel.add(ccLabel);
+        ccBccPanel.add(bccLabel);
+        return ccBccPanel;
     }
 
     private JPanel createFieldPanel(String label, boolean isToField) {
@@ -164,42 +175,40 @@ public class Compose extends JPanel {
         return panel;
     }
 
-    private JPanel createToolbarPanel() {
-        JPanel panel = new JPanel(new MigLayout("fillx,insets 12 20 12 20", "[][][][][][][][grow][]", "[]"));
-
-        // Toolbar buttons
-        String[] icons = {"B", "I", "≡", "• •", "1.", "🖼", "✎", "🔗"};
-        for (String icon : icons) {
-            JButton btn = new JButton(icon);
-            btn.putClientProperty(FlatClientProperties.BUTTON_TYPE,
-                    FlatClientProperties.BUTTON_TYPE_BORDERLESS);
-            btn.setFocusPainted(false);
-            panel.add(btn);
+    private JButton createToolbarButton(String iconPath, int size, ActionListener listener) {
+        JButton btn = new JButton(new FlatSVGIcon(iconPath, size, size));
+        btn.putClientProperty(FlatClientProperties.BUTTON_TYPE,
+                FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        btn.setFocusPainted(false);
+        if (listener != null) {
+            btn.addActionListener(listener);
         }
+        return btn;
+    }
+
+    private JPanel createToolbarPanel() {
+        JPanel panel = new JPanel(new MigLayout("fillx,insets 12 20 12 20", "[][][][][][][][][grow][]", "[]"));
+
+        panel.add(createToolbarButton("icons/compose/bold.svg", iconSize, e -> {}));
+        panel.add(createToolbarButton("icons/compose/italic.svg", iconSize, e -> {}));
+        panel.add(createToolbarButton("icons/compose/align_left.svg", iconSize, e -> {}));
+        panel.add(createToolbarButton("icons/compose/bullet.svg", iconSize, e -> {}));
+        panel.add(createToolbarButton("icons/compose/numbered.svg", iconSize, e -> {}));
+        panel.add(createToolbarButton("icons/compose/image.svg", iconSize, e -> {}));
+        panel.add(createToolbarButton("icons/compose/edit.svg", iconSize, e -> {}));
+        panel.add(createToolbarButton("icons/compose/link.svg", iconSize, e -> {}));
+        panel.add(createToolbarButton("icons/compose/attach.svg", iconSize, e -> chooseAttachment()));
 
         panel.add(new JLabel(), "pushx,growx");
 
         // Send button
-        JButton sendBtn = new JButton("✉ Send");
+        JButton sendBtn = new JButton("Send");
         sendBtn.setFocusPainted(false);
         sendBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         sendBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, "roundRect");
         sendBtn.addActionListener(e -> sendEmail());
 
-        JButton attachBtn = new JButton();
-        attachBtn.setIcon(new FlatSVGIcon("icons/attach.svg",25, 25));
-        attachBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
-        attachBtn.setToolTipText("Attach file");
-        attachBtn.addActionListener(e -> chooseAttachment());
-
-        JButton dropdownBtn = new JButton("▼");
-        dropdownBtn.setFocusPainted(false);
-        dropdownBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-        panel.add(attachBtn);
-        panel.add(sendBtn, "split 2,gap 0");
-        panel.add(dropdownBtn, "gap 2");
-
+        panel.add(sendBtn, "split 2, gap 0, w 80!, h 30!");
         return panel;
     }
 
@@ -248,7 +257,7 @@ public class Compose extends JPanel {
         // Send in background thread
         SwingWorker<Boolean, Void> worker = new SwingWorker<>() {
             @Override
-            protected Boolean doInBackground() throws Exception {
+            protected Boolean doInBackground() {
                 return controller.sendEmail(createEmail());
             }
 
@@ -352,8 +361,7 @@ public class Compose extends JPanel {
         for (Component comp : components) {
             if (comp instanceof JPanel) {
                 for (Component child : ((JPanel) comp).getComponents()) {
-                    if (child instanceof JButton) {
-                        JButton btn = (JButton) child;
+                    if (child instanceof JButton btn) {
                         if (btn.getText().contains("Send")) {
                             return btn;
                         }
@@ -365,11 +373,10 @@ public class Compose extends JPanel {
     }
 
     private void chooseAttachment() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setMultiSelectionEnabled(true);
-        int result = fileChooser.showOpenDialog(this);
+        JnaFileChooser fileChooser = new JnaFileChooser();
+        boolean result = fileChooser.showOpenDialog(SwingUtilities.getWindowAncestor(this));
 
-        if (result == JFileChooser.APPROVE_OPTION) {
+        if (result) {
             File[] selectedFiles = fileChooser.getSelectedFiles();
             for (File f : selectedFiles) {
                 attachments.add(f);
@@ -388,7 +395,7 @@ public class Compose extends JPanel {
         JLabel nameLabel = new JLabel("📄 " + file.getName());
         nameLabel.setForeground(Color.WHITE);
 
-        JButton removeBtn = new JButton("❌");
+        JButton removeBtn = new JButton("Remove");
         removeBtn.setFocusPainted(false);
         removeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
         removeBtn.addActionListener(e -> {
