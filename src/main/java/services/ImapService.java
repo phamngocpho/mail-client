@@ -132,6 +132,87 @@ public class ImapService {
     }
 
     /**
+     * Update flags cho email trong folder hiện tại
+     */
+    public void updateFlags(String folderName, int messageNumber, List<String> flags, boolean add) throws ImapException {
+        if (!isConnected) {
+            throw new ImapException("Not connected. Call connect() first.");
+        }
+
+        try {
+            // Select folder nếu chưa select
+            if (!folderName.equals(client.getSelectedFolder())) {
+                client.selectFolder(folderName);
+            }
+
+            client.updateFlags(messageNumber, flags, add);
+        } catch (ImapException e) {
+            throw new ImapException("Failed to update flags: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Mark email as read
+     */
+    public void markAsRead(String folderName, int messageNumber, boolean read) throws ImapException {
+        updateFlags(folderName, messageNumber, List.of("\\Seen"), read);
+    }
+
+    /**
+     * Toggle star
+     */
+    public void toggleStar(String folderName, int messageNumber, boolean starred) throws ImapException {
+        updateFlags(folderName, messageNumber, List.of("\\Flagged"), starred);
+    }
+
+    /**
+     * Delete email (mark + expunge)
+     */
+    public void deleteEmail(String folderName, int messageNumber) throws ImapException {
+        if (!isConnected) {
+            throw new ImapException("Not connected. Call connect() first.");
+        }
+
+        try {
+            if (!folderName.equals(client.getSelectedFolder())) {
+                client.selectFolder(folderName);
+            }
+
+            // Mark as deleted
+            client.markAsDeleted(messageNumber);
+
+            // Permanently delete
+            client.expunge();
+        } catch (ImapException e) {
+            throw new ImapException("Failed to delete email: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Move email to another folder (copy + delete)
+     */
+    public void moveEmail(String fromFolder, int messageNumber, String toFolder) throws ImapException {
+        if (!isConnected) {
+            throw new ImapException("Not connected. Call connect() first.");
+        }
+
+        try {
+            if (!fromFolder.equals(client.getSelectedFolder())) {
+                client.selectFolder(fromFolder);
+            }
+
+            // Copy to target folder
+            client.copyEmail(messageNumber, toFolder);
+
+            // Delete from source
+            client.markAsDeleted(messageNumber);
+            client.expunge();
+        } catch (ImapException e) {
+            throw new ImapException("Failed to move email: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * List tất cả folders
      */
     public List<Folder> listFolders() throws ImapException {

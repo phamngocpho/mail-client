@@ -124,8 +124,50 @@ public class Inbox extends JPanel {
         searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_LEADING_COMPONENT, searchButton);
         searchField.setPreferredSize(new Dimension(300, 40));
         toolbar.add(searchField, "w 250:300:350, gap right 10, al right");
-
         return toolbar;
+    }
+
+    private void showContextMenu(MouseEvent e) {
+        int row = emailTable.rowAtPoint(e.getPoint());
+        if (row < 0 || row >= emails.size()) return;
+
+        emailTable.setRowSelectionInterval(row, row);
+        Email email = emails.get(row);
+
+        JPopupMenu menu = new JPopupMenu();
+
+        // Mark as read/unread
+        JMenuItem markReadItem = new JMenuItem(
+                email.hasFlag("Seen") ? "Mark as Unread" : "Mark as Read"
+        );
+        markReadItem.addActionListener(ev -> {
+            controller.markAsRead(email, !email.hasFlag("Seen"));
+        });
+        menu.add(markReadItem);
+
+        // Delete
+        JMenuItem deleteItem = new JMenuItem("Delete");
+        deleteItem.addActionListener(ev -> {
+            controller.deleteEmail(email);
+        });
+        menu.add(deleteItem);
+
+        menu.show(emailTable, e.getX(), e.getY());
+    }
+
+    /**
+     * Refresh single email row
+     */
+    public void refreshEmailRow(Email email) {
+        int index = emails.indexOf(email);
+        if (index >= 0) {
+            tableModel.setValueAt(
+                    email.hasFlag("Seen") ? extractName(email.getFrom()) :
+                            "<html><b>" + extractName(email.getFrom()) + "</b></html>",
+                    index, 2
+            );
+            tableModel.fireTableRowsUpdated(index, index);
+        }
     }
 
     /**
@@ -201,11 +243,24 @@ public class Inbox extends JPanel {
         // Mouse listener for star column clicks
         emailTable.addMouseListener(new MouseAdapter() {
             @Override
+            public void mousePressed(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showContextMenu(e);
+                }
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showContextMenu(e);
+                }
+            }
+
+            @Override
             public void mouseClicked(MouseEvent e) {
                 int row = emailTable.rowAtPoint(e.getPoint());
                 int col = emailTable.columnAtPoint(e.getPoint());
 
-                // Check if clicked on star column (column 1)
                 if (col == 1 && row >= 0 && row < emails.size()) {
                     toggleStarred(row);
                 }

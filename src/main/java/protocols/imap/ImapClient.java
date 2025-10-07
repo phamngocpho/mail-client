@@ -191,6 +191,98 @@ public class ImapClient {
     }
 
     /**
+     * Update flags cho một email
+     * @param messageNumber Message number (1-indexed)
+     * @param flags List flags cần update (ví dụ: "\\Seen", "\\Flagged", "\\Deleted")
+     * @param add true = thêm flags, false = xóa flags
+     */
+    public void updateFlags(int messageNumber, List<String> flags, boolean add) throws ImapException {
+        if (selectedFolder == null) {
+            throw new ImapException("No folder selected");
+        }
+
+        String tag = nextTag();
+        String flagsStr = String.join(" ", flags);
+        String mode = add ? "+FLAGS" : "-FLAGS";
+        String command = String.format("%s STORE %d %s (%s)", tag, messageNumber, mode, flagsStr);
+
+        System.out.println("→ " + command);
+        sendCommand(command);
+        String response = readFullResponse(tag);
+
+        if (ImapParser.isError(response, tag)) {
+            throw new ImapException(command, response, "Failed to update flags");
+        }
+
+        System.out.println("✓ Flags updated");
+    }
+
+    /**
+     * Mark email as read/unread
+     */
+    public void markAsRead(int messageNumber, boolean read) throws ImapException {
+        updateFlags(messageNumber, List.of("\\Seen"), read);
+    }
+
+    /**
+     * Toggle starred status
+     */
+    public void toggleStar(int messageNumber, boolean starred) throws ImapException {
+        updateFlags(messageNumber, List.of("\\Flagged"), starred);
+    }
+
+    /**
+     * Mark for deletion (sẽ xóa khi gọi EXPUNGE)
+     */
+    public void markAsDeleted(int messageNumber) throws ImapException {
+        updateFlags(messageNumber, List.of("\\Deleted"), true);
+    }
+
+    /**
+     * Permanently delete emails marked with \Deleted flag
+     */
+    public void expunge() throws ImapException {
+        if (selectedFolder == null) {
+            throw new ImapException("No folder selected");
+        }
+
+        String tag = nextTag();
+        String command = tag + " EXPUNGE";
+
+        System.out.println("→ " + command);
+        sendCommand(command);
+        String response = readFullResponse(tag);
+
+        if (ImapParser.isError(response, tag)) {
+            throw new ImapException(command, response, "EXPUNGE failed");
+        }
+
+        System.out.println("✓ Expunged deleted messages");
+    }
+
+    /**
+     * Copy email to another folder
+     */
+    public void copyEmail(int messageNumber, String targetFolder) throws ImapException {
+        if (selectedFolder == null) {
+            throw new ImapException("No folder selected");
+        }
+
+        String tag = nextTag();
+        String command = String.format("%s COPY %d %s", tag, messageNumber, quote(targetFolder));
+
+        System.out.println("→ " + command);
+        sendCommand(command);
+        String response = readFullResponse(tag);
+
+        if (ImapParser.isError(response, tag)) {
+            throw new ImapException(command, response, "Failed to copy email");
+        }
+
+        System.out.println("✓ Email copied to " + targetFolder);
+    }
+
+    /**
      * Logout và đóng kết nối
      */
     public void logout() throws ImapException {
