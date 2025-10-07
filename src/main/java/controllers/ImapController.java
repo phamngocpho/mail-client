@@ -7,6 +7,7 @@ import raven.toast.Notifications;
 import services.ImapService;
 
 import javax.swing.*;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -111,9 +112,32 @@ public class ImapController {
     public void updateEmailFlags(Email email) {
         SwingWorker<Void, Void> worker = new SwingWorker<>() {
             @Override
-            protected Void doInBackground() {
-                // TODO: Implement flag update on IMAP server
-                // imapService.updateFlags(email.getMessageNumber(), email.getFlags());
+            protected Void doInBackground() throws Exception {
+                // Lấy flags từ email object
+                List<String> flagsToAdd = new ArrayList<>();
+                List<String> flagsToRemove = new ArrayList<>();
+
+                // Check which flags changed
+                if (email.hasFlag("Flagged")) {
+                    flagsToAdd.add("\\Flagged");
+                } else {
+                    flagsToRemove.add("\\Flagged");
+                }
+
+                if (email.hasFlag("Seen")) {
+                    flagsToAdd.add("\\Seen");
+                } else {
+                    flagsToRemove.add("\\Seen");
+                }
+
+                // Update trên server
+                if (!flagsToAdd.isEmpty()) {
+                    imapService.updateFlags(currentFolder, email.getMessageNumber(), flagsToAdd, true);
+                }
+                if (!flagsToRemove.isEmpty()) {
+                    imapService.updateFlags(currentFolder, email.getMessageNumber(), flagsToRemove, false);
+                }
+
                 return null;
             }
 
@@ -121,8 +145,80 @@ public class ImapController {
             protected void done() {
                 try {
                     get();
+                    System.out.println("✓ Flags synced with server");
                 } catch (Exception e) {
                     showError("Failed to update flags: " + e.getMessage());
+                }
+            }
+        };
+
+        worker.execute();
+    }
+
+    /**
+     * Mark email as read/unread
+     */
+    public void markAsRead(Email email, boolean read) {
+        SwingWorker<Void, Void> worker = new SwingWorker<>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                imapService.markAsRead(currentFolder, email.getMessageNumber(), read);
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    get();
+                    // Update local email object
+                    if (read) {
+                        email.addFlag("Seen");
+                    } else {
+                        email.removeFlag("Seen");
+                    }
+                    // Refresh UI
+                    inboxPanel.refreshEmailRow(email);
+                } catch (Exception e) {
+                    showError("Failed to mark as read: " + e.getMessage());
+                }
+            }
+        };
+
+        worker.execute();
+    }
+
+    /**
+     * Delete email
+     */
+    public void deleteEmail(Email email) {
+        // Confirm dialog
+        int result = JOptionPane.showConfirmDialog(
+                null,
+                "Are you sure you want to delete this email?",
+                "Confirm Delete",
+                JOptionPane.YES_NO_OPTION
+        );
+
+        if (result != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        SwingWorker<Void, Void> worker = new SwingWorker<>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                imapService.deleteEmail(currentFolder, email.getMessageNumber());
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    get();
+                    // Refresh to remove from list
+                    refresh();
+                    Notifications.getInstance().show(Notifications.Type.SUCCESS, "Email deleted");
+                } catch (Exception e) {
+                    showError("Failed to delete email: " + e.getMessage());
                 }
             }
         };
