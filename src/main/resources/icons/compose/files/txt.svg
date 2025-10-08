@@ -1,0 +1,10 @@
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" xmlns="http://www.w3.org/2000/svg" width="50px"
+     height="50px" viewBox="0,0,256,256">
+    <g fill="#9CA3AF" fill-rule="nonzero" stroke="none" stroke-width="1" stroke-linecap="butt" stroke-linejoin="miter"
+       stroke-miterlimit="10" stroke-dasharray="" stroke-dashoffset="0" font-family="none"
+       font-size="none" style="mix-blend-mode: normal">
+        <g transform="scale(5.12,5.12)">
+            <path d="M7,2v46h36v-32.58984l-13.81641,-13.41016zM9,4h19v13h13v29h-32zM30,5.57813l9.70703,9.42188h-9.70703zM22.01172,23.55469l1.8125,4.93359l-1.89062,5.17578h1.94922l0.53906,-1.82812c0.15234,-0.57031 0.31641,-1.18359 0.48047,-1.83203h0.03125c0.17969,0.64844 0.34375,1.21875 0.53906,1.80469l0.64453,1.85547h2.02734l-1.99219,-5.08594l1.88672,-5.02344h-1.96484l-0.51172,1.84766c-0.13281,0.55469 -0.25391,1.03516 -0.41797,1.64844h-0.03125c-0.16406,-0.57031 -0.29687,-1.09766 -0.46094,-1.62109l-0.58984,-1.875zM15.94922,23.55859v1.8125h1.78516v8.29297h1.96484v-8.29297h1.80078v-1.8125zM28.51953,23.55859v1.8125h1.78125v8.29297h1.96484v-8.29297h1.80078v-1.8125z"></path>
+        </g>
+    </g>
+</svg>

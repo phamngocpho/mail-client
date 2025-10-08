@@ -32,7 +32,7 @@ public class ImapController {
         imapService.connect(host, email, password);
 
         // Fetch emails from INBOX
-        List<Email> emails = imapService.fetchRecentEmails(currentFolder, 30);
+        List<Email> emails = imapService.fetchRecentEmails(currentFolder, 11);
 
         // Update UI on EDT
         SwingUtilities.invokeLater(() -> {
@@ -56,7 +56,7 @@ public class ImapController {
                 imapService.connect(host, email, password);
 
                 // Fetch emails from INBOX
-                return imapService.fetchRecentEmails(currentFolder, 30);
+                return imapService.fetchRecentEmails(currentFolder, 11);
             }
 
             @Override
@@ -103,7 +103,7 @@ public class ImapController {
      * Refresh current folder
      */
     public void refresh() {
-        loadFolder(currentFolder, 30);
+        loadFolder(currentFolder, 11);
     }
 
     /**
