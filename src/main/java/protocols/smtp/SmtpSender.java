@@ -35,8 +35,8 @@ public class SmtpSender {
             if (port == Constants.SMTP_SSL_PORT) {
                 // SSL connection (port 465)
                 socket = NetworkUtils.createSSLSocket(
-                        "smtp.gmail.com", 465,
-                        "192.168.193.62",
+                        host, port,
+                        null,
                         0
                 );
                 System.out.println("Connected to " + host + ":" + port);
