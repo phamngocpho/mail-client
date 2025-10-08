@@ -16,13 +16,11 @@ import java.awt.event.ActionListener;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Stream;
 
 public class Compose extends JPanel {
     private JTextField toField;
     private JTextField subjectField;
     private JTextArea bodyArea;
-    private JComboBox<String> fromCombo;
     private JPanel ccPanel;
     private JPanel bccPanel;
     private JTextField ccField;
@@ -32,22 +30,22 @@ public class Compose extends JPanel {
     private JPanel attachmentPanel;
 
     private final List<File> attachments = new ArrayList<>();
-    private final int iconSize = Value.defaultIconSize - 2;
+    private final int iconSize = Value.defaultIconSize - 3;
 
 
 
-    private SmtpController controller;
+    private final SmtpController controller;
+    private JButton fromSelector;
 
     public Compose() {
         this.controller = SmtpController.getInstance();
+        controller.addPropertyChangeListener(evt -> {
+            if ("configured".equals(evt.getPropertyName()) &&
+                    Boolean.TRUE.equals(evt.getNewValue())) {
+                updateFromEmail();
+            }
+        });
         init();
-    }
-
-    /**
-     * Set controller (nếu muốn inject từ bên ngoài)
-     */
-    public void setController(SmtpController controller) {
-        this.controller = controller;
     }
 
     private void init() {
@@ -99,14 +97,13 @@ public class Compose extends JPanel {
 
         // From field
         JPanel fromPanel = createFieldPanel("From", false);
-        fromCombo = new JComboBox<>(new String[]{getDefaultEmail()});
-        fromCombo.setBackground(Value.dark_gray);
+        JButton fromSelector = createFromSelector();
 
         JLabel avatarLabel = new JLabel();
         avatarLabel.setPreferredSize(new Dimension(32, 32));
         avatarLabel.setOpaque(true);
         fromPanel.add(avatarLabel, "w 32!,h 32!");
-        fromPanel.add(fromCombo, "growx");
+        fromPanel.add(fromSelector, "growx, al right, h 28!, w ::30%");
         add(fromPanel, "wrap,growx");
 
         // Separator
@@ -136,6 +133,23 @@ public class Compose extends JPanel {
         add(createToolbarPanel(), "growx,h 60!");
         setBorder(BorderFactory.createMatteBorder(0, 2, 0, 0, Value.dark_gray));
     }
+
+    private JButton createFromSelector() {
+        fromSelector = new JButton();
+        fromSelector.setHorizontalTextPosition(SwingConstants.LEFT);
+        fromSelector.putClientProperty(FlatClientProperties.BUTTON_TYPE, "roundRect");
+        fromSelector.setFocusPainted(false);
+        fromSelector.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        fromSelector.setBackground(Value.dark_gray);
+
+        fromSelector.addActionListener(e -> showEmailSelector());
+
+        updateFromEmail();
+
+        return fromSelector;
+    }
+
+
 
     private JPanel getCcBccPanel() {
         JPanel ccBccPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
@@ -175,8 +189,8 @@ public class Compose extends JPanel {
         return panel;
     }
 
-    private JButton createToolbarButton(String iconPath, int size, ActionListener listener) {
-        JButton btn = new JButton(new FlatSVGIcon(iconPath, size, size));
+    private JButton createToolbarButton(String iconPath, ActionListener listener) {
+        JButton btn = new JButton(new FlatSVGIcon(iconPath, iconSize, iconSize));
         btn.putClientProperty(FlatClientProperties.BUTTON_TYPE,
                 FlatClientProperties.BUTTON_TYPE_BORDERLESS);
         btn.setFocusPainted(false);
@@ -189,15 +203,15 @@ public class Compose extends JPanel {
     private JPanel createToolbarPanel() {
         JPanel panel = new JPanel(new MigLayout("fillx,insets 12 20 12 20", "[][][][][][][][][grow][]", "[]"));
 
-        panel.add(createToolbarButton("icons/compose/bold.svg", iconSize, e -> {}));
-        panel.add(createToolbarButton("icons/compose/italic.svg", iconSize, e -> {}));
-        panel.add(createToolbarButton("icons/compose/align_left.svg", iconSize, e -> {}));
-        panel.add(createToolbarButton("icons/compose/bullet.svg", iconSize, e -> {}));
-        panel.add(createToolbarButton("icons/compose/numbered.svg", iconSize, e -> {}));
-        panel.add(createToolbarButton("icons/compose/image.svg", iconSize, e -> {}));
-        panel.add(createToolbarButton("icons/compose/edit.svg", iconSize, e -> {}));
-        panel.add(createToolbarButton("icons/compose/link.svg", iconSize, e -> {}));
-        panel.add(createToolbarButton("icons/compose/attach.svg", iconSize, e -> chooseAttachment()));
+        panel.add(createToolbarButton("icons/compose/bold.svg", e -> {}));
+        panel.add(createToolbarButton("icons/compose/italic.svg", e -> {}));
+        panel.add(createToolbarButton("icons/compose/align_left.svg", e -> {}));
+        panel.add(createToolbarButton("icons/compose/bullet.svg", e -> {}));
+        panel.add(createToolbarButton("icons/compose/numbered.svg", e -> {}));
+        panel.add(createToolbarButton("icons/compose/image.svg", e -> {}));
+        panel.add(createToolbarButton("icons/compose/edit.svg", e -> {}));
+        panel.add(createToolbarButton("icons/compose/link.svg", e -> {}));
+        panel.add(createToolbarButton("icons/compose/attach.svg", e -> chooseAttachment()));
 
         panel.add(new JLabel(), "pushx,growx");
 
@@ -208,7 +222,7 @@ public class Compose extends JPanel {
         sendBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, "roundRect");
         sendBtn.addActionListener(e -> sendEmail());
 
-        panel.add(sendBtn, "split 2, gap 0, w 80!, h 30!");
+        panel.add(sendBtn, "split 2, gap 0, w 100!, h 30!");
         return panel;
     }
 
@@ -309,7 +323,7 @@ public class Compose extends JPanel {
 
     private Email createEmail() {
         Email email = new Email();
-        email.setFrom(getFrom());
+        email.setFrom(fromSelector.getText().trim());
 
         // Parse To addresses
         String[] toAddresses = toField.getText().split("[,;]");
@@ -387,15 +401,51 @@ public class Compose extends JPanel {
         }
     }
 
+    private Icon getFileIcon(File file) {
+        String fileName = file.getName().toLowerCase();
+        String iconPath = "icons/compose/files/";
+
+        // Xác định icon dựa trên đuôi file
+        if (fileName.endsWith(".txt")) {
+            iconPath += "txt.svg";
+        } else if (fileName.endsWith(".pdf")) {
+            iconPath += "pdf.svg";
+        } else if (fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+            iconPath += "word.svg";
+        } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg") ||
+                fileName.endsWith(".png") || fileName.endsWith(".gif") ||
+                fileName.endsWith(".bmp") || fileName.endsWith(".svg")) {
+            iconPath += "image.svg";
+        } else if (fileName.endsWith(".mp3") || fileName.endsWith(".wav") ||
+                fileName.endsWith(".flac") || fileName.endsWith(".aac") ||
+                fileName.endsWith(".m4a") || fileName.endsWith(".ogg")) {
+            iconPath += "audio.svg";
+        } else if (fileName.endsWith(".mp4") || fileName.endsWith(".avi") ||
+                fileName.endsWith(".mkv") || fileName.endsWith(".mov") ||
+                fileName.endsWith(".wmv") || fileName.endsWith(".flv")) {
+            iconPath += "video.svg";
+        } else if (fileName.endsWith(".exe") || fileName.endsWith(".msi")) {
+            iconPath += "exe.svg";
+        } else if (fileName.endsWith(".bat") || fileName.endsWith(".cmd")) {
+            iconPath += "bat.svg";
+        } else {
+            iconPath += "unknown.svg";
+        }
+
+        return new FlatSVGIcon(iconPath, iconSize, iconSize);
+    }
+
+
     private void addAttachmentToPanel(File file) {
         JPanel fileItem = new JPanel(new MigLayout("insets 5, fillx", "[grow][]"));
         fileItem.setBackground(new Color(40, 40, 40));
         fileItem.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
 
-        JLabel nameLabel = new JLabel("📄 " + file.getName());
+        JLabel nameLabel = new JLabel(file.getName());
+        nameLabel.setIcon(getFileIcon(file));
         nameLabel.setForeground(Color.WHITE);
 
-        JButton removeBtn = new JButton("Remove");
+        JButton removeBtn = new JButton(new FlatSVGIcon("icons/compose/remove.svg", iconSize, iconSize));
         removeBtn.setFocusPainted(false);
         removeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
         removeBtn.addActionListener(e -> {
@@ -410,13 +460,31 @@ public class Compose extends JPanel {
         attachmentPanel.add(fileItem, "growx, wrap");
     }
 
+    /**
+     * Update email display - tự động gọi khi controller configured
+     */
+    private void updateFromEmail() {
+        SwingUtilities.invokeLater(() -> {
+            if (fromSelector != null) {
+                if (controller.isConfigured()) {
+                    fromSelector.setText(controller.getUsername());
+                } else {
+                    fromSelector.setText("Connect to email server...");
+                }
+                revalidate();
+                repaint();
+            }
+        });
+    }
 
-
-    private String getDefaultEmail() {
-        if (controller.isConfigured()) {
-            return controller.getUsername();
+    private void showEmailSelector() {
+        if (!controller.isConfigured()) {
+            Notifications.getInstance().show(
+                    Notifications.Type.WARNING,
+                    Notifications.Location.TOP_CENTER,
+                    "Please connect to email server first"
+            );
         }
-        return "your@email.com";
     }
 
     /**
@@ -447,9 +515,6 @@ public class Compose extends JPanel {
         return bodyArea.getText();
     }
 
-    public String getFrom() {
-        return (String) fromCombo.getSelectedItem();
-    }
     public static void main(String[] args) {
         FlatMacDarkLaf.setup();
         SwingUtilities.invokeLater(() -> {

@@ -6,9 +6,13 @@ import org.slf4j.LoggerFactory;
 import protocols.smtp.SmtpException;
 import services.SmtpService;
 
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
+
 public class SmtpController {
     private static SmtpController instance;
     private final SmtpService smtpService;
+    private final PropertyChangeSupport pcs = new PropertyChangeSupport(this);
 
     private String smtpHost;
     private int smtpPort;
@@ -35,10 +39,13 @@ public class SmtpController {
      * Tự động convert IMAP host thành SMTP host
      */
     public void configureFromImap(String imapHost, String username, String password) {
+        String oldUsername = this.username;
+        boolean wasConfigured = this.isConfigured;
+
         this.username = username;
         this.password = password;
         this.useTLS = true;
-        this.smtpPort = 587; // Default TLS port
+        this.smtpPort = 587;
 
         // Convert IMAP host to SMTP host
         if (imapHost.startsWith("imap.")) {
@@ -46,12 +53,15 @@ public class SmtpController {
         } else if (imapHost.equals("outlook.office365.com")) {
             this.smtpHost = "smtp.office365.com";
         } else {
-            // Fallback: try replacing imap with smtp
             this.smtpHost = imapHost.replace("imap", "smtp");
         }
 
         this.isConfigured = true;
-        System.out.println("SMTP auto-configured: " + username + " @ " + smtpHost);
+
+        pcs.firePropertyChange("username", oldUsername, username);
+        pcs.firePropertyChange("configured", wasConfigured, true);
+
+        logger.info("SMTP auto-configured from IMAP: {} @ {}", username, smtpHost);
     }
 
     /**
@@ -156,5 +166,13 @@ public class SmtpController {
 
     public boolean isConnected() {
         return smtpService.isConnected();
+    }
+
+    public void addPropertyChangeListener(PropertyChangeListener listener) {
+        pcs.addPropertyChangeListener(listener);
+    }
+
+    public void removePropertyChangeListener(PropertyChangeListener listener) {
+        pcs.removePropertyChangeListener(listener);
     }
 }
