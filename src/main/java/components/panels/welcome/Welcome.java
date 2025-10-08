@@ -17,7 +17,7 @@ public class Welcome extends JPanel {
     private void init() {
         setLayout(new MigLayout("fill, insets 0"));
 
-        JButton btn = new JButton("Hello World");
+        JButton btn = new JButton("Welcome");
         btn.putClientProperty(FlatClientProperties.STYLE, "arc:100");
 
         btn.setBackground(Color.decode("#2C2C2C"));

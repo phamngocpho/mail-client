@@ -34,11 +34,17 @@ public class SmtpSender {
 
             if (port == Constants.SMTP_SSL_PORT) {
                 // SSL connection (port 465)
-                socket = NetworkUtils.createSSLSocket(host, port);
+                socket = NetworkUtils.createSSLSocket(
+                        "smtp.gmail.com", 465,
+                        "192.168.193.62",
+                        0
+                );
+                System.out.println("Connected to " + host + ":" + port);
             } else {
                 // Plain connection (port 587 hoặc 25)
                 socket = new Socket(host, port);
                 socket.setSoTimeout(Constants.SOCKET_TIMEOUT);
+                System.out.println("Connected to " + host + ":" + port);
             }
 
             reader = NetworkUtils.createReader(socket);
