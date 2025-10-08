@@ -31,8 +31,8 @@ public class ImapClient {
         try {
             System.out.println("Connecting to " + host + ":" + port);
             socket = NetworkUtils.createSSLSocket(
-                    "smtp.gmail.com", 993,
-                    "192.168.193.62",
+                    host, port,
+                    null,
                     0
             );
             reader = NetworkUtils.createReader(socket);

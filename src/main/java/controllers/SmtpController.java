@@ -128,18 +128,6 @@ public class SmtpController {
     }
 
     /**
-     * Test SMTP connection
-     */
-    public boolean testConnection() {
-        if (!isConfigured) {
-            logger.error("SMTP not configured. Please call configure() first.");
-            return false;
-        }
-
-        return smtpService.testConnection(smtpHost, smtpPort, useTLS, username, password);
-    }
-
-    /**
      * Quick send (for testing)
      */
     public static boolean quickSend(String host, String username, String password,

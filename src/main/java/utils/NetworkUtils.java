@@ -26,16 +26,19 @@ public class NetworkUtils {
 
             SSLSocketFactory factory = sslContext.getSocketFactory();
 
-            // Tạo socket chưa kết nối
-            SSLSocket socket = (SSLSocket) factory.createSocket();
+            SSLSocket socket;
 
-            // Bind với IP và port cục bộ của bạn
-            InetSocketAddress localAddress = new InetSocketAddress(localIP, localPort);
-            socket.bind(localAddress);
-
-            // Sau đó mới connect đến server
-            InetSocketAddress remoteAddress = new InetSocketAddress(host, port);
-            socket.connect(remoteAddress);
+            // Nếu localIP là null -> tự động
+            if (localIP == null || localIP.isEmpty()) {
+                socket = (SSLSocket) factory.createSocket(host, port);
+            } else {
+                // Thủ công bind IP
+                socket = (SSLSocket) factory.createSocket();
+                InetSocketAddress localAddress = new InetSocketAddress(localIP, localPort);
+                socket.bind(localAddress);
+                InetSocketAddress remoteAddress = new InetSocketAddress(host, port);
+                socket.connect(remoteAddress);
+            }
 
             socket.setSoTimeout(Constants.SOCKET_TIMEOUT);
             socket.startHandshake();
