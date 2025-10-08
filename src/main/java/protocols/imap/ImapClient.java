@@ -30,7 +30,11 @@ public class ImapClient {
     public void connect(String host, int port) throws ImapException {
         try {
             System.out.println("Connecting to " + host + ":" + port);
-            socket = NetworkUtils.createSSLSocket(host, port);
+            socket = NetworkUtils.createSSLSocket(
+                    "smtp.gmail.com", 993,
+                    "192.168.193.62",
+                    0
+            );
             reader = NetworkUtils.createReader(socket);
             writer = NetworkUtils.createWriter(socket);
 

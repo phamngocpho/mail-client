@@ -2,6 +2,7 @@ package utils;
 
 import javax.net.ssl.*;
 import java.io.*;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.security.cert.X509Certificate;
 
@@ -10,9 +11,8 @@ public class NetworkUtils {
     /**
      * Tạo SSL Socket với trust tất cả certificates (cho testing)
      */
-    public static SSLSocket createSSLSocket(String host, int port) throws IOException {
+    public static SSLSocket createSSLSocket(String host, int port, String localIP, int localPort) throws IOException {
         try {
-            // Tạo TrustManager chấp nhận tất cả certificates
             TrustManager[] trustAllCerts = new TrustManager[]{
                     new X509TrustManager() {
                         public X509Certificate[] getAcceptedIssuers() { return null; }
@@ -25,7 +25,18 @@ public class NetworkUtils {
             sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
 
             SSLSocketFactory factory = sslContext.getSocketFactory();
-            SSLSocket socket = (SSLSocket) factory.createSocket(host, port);
+
+            // Tạo socket chưa kết nối
+            SSLSocket socket = (SSLSocket) factory.createSocket();
+
+            // Bind với IP và port cục bộ của bạn
+            InetSocketAddress localAddress = new InetSocketAddress(localIP, localPort);
+            socket.bind(localAddress);
+
+            // Sau đó mới connect đến server
+            InetSocketAddress remoteAddress = new InetSocketAddress(host, port);
+            socket.connect(remoteAddress);
+
             socket.setSoTimeout(Constants.SOCKET_TIMEOUT);
             socket.startHandshake();
 
