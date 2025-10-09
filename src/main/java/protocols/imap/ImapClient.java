@@ -29,7 +29,7 @@ public class ImapClient {
      */
     public void connect(String host, int port) throws ImapException {
         try {
-            System.out.println("Connecting to " + host + ":" + port);
+            logger.info("Connecting to {}:{}", host, port);
             socket = NetworkUtils.createSSLSocket(
                     host, port,
                     null,
@@ -40,7 +40,7 @@ public class ImapClient {
 
             // Đọc greeting từ server
             String greeting = readResponse();
-            System.out.println("← " + greeting);
+            logger.debug("← Server greeting: {}", greeting);
 
             if (!greeting.startsWith("* OK")) {
                 throw new ImapException("Invalid server greeting: " + greeting);
@@ -71,7 +71,7 @@ public class ImapClient {
         String command = String.format("%s LOGIN %s %s", tag, quote(username), quote(password));
 
         // Log command (ẩn password)
-        System.out.println("→ " + tag + " LOGIN " + quote(username) + " ****");
+        logger.debug("→ {} LOGIN {} ****", tag, quote(username));
 
         sendCommand(command);
         String response = readFullResponse(tag);
@@ -81,7 +81,7 @@ public class ImapClient {
         }
 
         authenticated = true;
-        System.out.println("✓ Login successful");
+        logger.info("Login successful for user: {}", username);
     }
 
     /**
@@ -95,7 +95,7 @@ public class ImapClient {
         String tag = nextTag();
         String command = String.format("%s SELECT %s", tag, quote(folderName));
 
-        System.out.println("→ " + command);
+        logger.debug("→ {}", command);
         sendCommand(command);
         String response = readFullResponse(tag);
 
@@ -105,15 +105,16 @@ public class ImapClient {
 
         selectedFolder = folderName;
         int messageCount = ImapParser.parseMessageCount(response);
-        System.out.println("✓ Selected folder: " + folderName + " (" + messageCount + " messages)");
+        logger.info("Selected folder: {} ({} messages)", folderName, messageCount);
 
         return messageCount;
     }
 
     /**
      * Fetch emails từ folder đã select
+     *
      * @param start Message number bắt đầu (1-indexed)
-     * @param end Message number kết thúc
+     * @param end   Message number kết thúc
      */
     public List<Email> fetchEmails(int start, int end) throws ImapException {
         if (selectedFolder == null) {
@@ -126,7 +127,7 @@ public class ImapClient {
         // Fetch headers: FROM, TO, SUBJECT, DATE, FLAGS
         String command = String.format("%s FETCH %d:%d (FLAGS BODY[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID)] BODY.PEEK[])", tag, start, end);
 
-        System.out.println("→ " + command);
+        logger.debug("→ {}", command);
         sendCommand(command);
         String response = readFullResponse(tag);
 
@@ -136,7 +137,7 @@ public class ImapClient {
 
         // Parse từng email từ response
         emails = parseFetchResponse(response);
-        System.out.println("✓ Fetched " + emails.size() + " emails");
+        logger.debug("Fetched {} emails from folder: {}", emails.size(), selectedFolder);
 
         return emails;
     }
@@ -152,7 +153,7 @@ public class ImapClient {
         String tag = nextTag();
         String command = String.format("%s FETCH %d BODY[TEXT]", tag, messageNumber);
 
-        System.out.println("→ " + command);
+        logger.debug("→ {}", command);
         sendCommand(command);
         String response = readFullResponse(tag);
 
@@ -183,7 +184,7 @@ public class ImapClient {
         String tag = nextTag();
         String command = String.format("%s LIST \"\" \"*\"", tag);
 
-        System.out.println("→ " + command);
+        logger.debug("→ {}", command);
         sendCommand(command);
         String response = readFullResponse(tag);
 
@@ -196,9 +197,10 @@ public class ImapClient {
 
     /**
      * Update flags cho một email
+     *
      * @param messageNumber Message number (1-indexed)
-     * @param flags List flags cần update (ví dụ: "\\Seen", "\\Flagged", "\\Deleted")
-     * @param add true = thêm flags, false = xóa flags
+     * @param flags         List flags cần update (ví dụ: "\\Seen", "\\Flagged", "\\Deleted")
+     * @param add           true = thêm flags, false = xóa flags
      */
     public void updateFlags(int messageNumber, List<String> flags, boolean add) throws ImapException {
         if (selectedFolder == null) {
@@ -210,7 +212,7 @@ public class ImapClient {
         String mode = add ? "+FLAGS" : "-FLAGS";
         String command = String.format("%s STORE %d %s (%s)", tag, messageNumber, mode, flagsStr);
 
-        System.out.println("→ " + command);
+        logger.debug("→ {}", command);
         sendCommand(command);
         String response = readFullResponse(tag);
 
@@ -218,7 +220,7 @@ public class ImapClient {
             throw new ImapException(command, response, "Failed to update flags");
         }
 
-        System.out.println("✓ Flags updated");
+        logger.debug("Flags updated for message #{}", messageNumber);
     }
 
     /**
@@ -253,7 +255,7 @@ public class ImapClient {
         String tag = nextTag();
         String command = tag + " EXPUNGE";
 
-        System.out.println("→ " + command);
+        logger.debug("→ {}", command);
         sendCommand(command);
         String response = readFullResponse(tag);
 
@@ -261,7 +263,7 @@ public class ImapClient {
             throw new ImapException(command, response, "EXPUNGE failed");
         }
 
-        System.out.println("✓ Expunged deleted messages");
+        logger.info("Expunged deleted messages from folder: {}", selectedFolder);
     }
 
     /**
@@ -275,7 +277,7 @@ public class ImapClient {
         String tag = nextTag();
         String command = String.format("%s COPY %d %s", tag, messageNumber, quote(targetFolder));
 
-        System.out.println("→ " + command);
+        logger.debug("→ {}", command);
         sendCommand(command);
         String response = readFullResponse(tag);
 
@@ -283,7 +285,7 @@ public class ImapClient {
             throw new ImapException(command, response, "Failed to copy email");
         }
 
-        System.out.println("✓ Email copied to " + targetFolder);
+        logger.info("Email #{} copied to folder: {}", messageNumber, targetFolder);
     }
 
     /**
@@ -296,12 +298,12 @@ public class ImapClient {
             String tag = nextTag();
             String command = tag + " LOGOUT";
 
-            System.out.println("→ " + command);
+            logger.debug("→ {}", command);
             sendCommand(command);
             readFullResponse(tag);
 
             close();
-            System.out.println("✓ Logged out");
+            logger.info("Logged out successfully");
         } catch (Exception e) {
             throw new ImapException("Logout failed: " + e.getMessage(), e);
         }
@@ -344,14 +346,15 @@ public class ImapClient {
 
     private String readFullResponse(String tag) throws ImapException {
         StringBuilder response = new StringBuilder();
+        int lineCount = 0;
+
         try {
             String line;
             while ((line = reader.readLine()) != null) {
                 response.append(line).append("\r\n");
-                System.out.println("← " + line);
-
-                // Kết thúc khi gặp tagged response
+                lineCount++;
                 if (line.startsWith(tag + " ")) {
+                    logger.debug("← {} ({} lines)", line, lineCount);
                     break;
                 }
             }

@@ -30,7 +30,7 @@ public class SmtpSender {
     public void connect(String host, int port, boolean useTLS) throws SmtpException {
         try {
             this.serverName = host;
-            System.out.println("Connecting to " + host + ":" + port);
+            logger.info("Connecting to {}:{}", host, port);
 
             if (port == Constants.SMTP_SSL_PORT) {
                 // SSL connection (port 465)
@@ -39,20 +39,20 @@ public class SmtpSender {
                         null,
                         0
                 );
-                System.out.println("Connected to " + host + ":" + port);
             } else {
                 // Plain connection (port 587 hoặc 25)
                 socket = new Socket(host, port);
                 socket.setSoTimeout(Constants.SOCKET_TIMEOUT);
-                System.out.println("Connected to " + host + ":" + port);
             }
+
+            logger.info("Connected to {}:{}", host, port);
 
             reader = NetworkUtils.createReader(socket);
             writer = NetworkUtils.createWriter(socket);
 
             // Đọc greeting
             String greeting = readResponse();
-            System.out.println("← " + greeting);
+            logger.debug("← Server greeting: {}", greeting);
 
             if (!greeting.startsWith(Constants.SMTP_READY)) {
                 throw new SmtpException("Invalid server greeting: " + greeting);
@@ -84,14 +84,15 @@ public class SmtpSender {
      */
     private void sendEhlo() throws SmtpException {
         String command = "EHLO " + serverName;
-        System.out.println("→ " + command);
+        logger.debug("→ {}", command);
         writer.println(command);
 
         String response = readMultilineResponse();
+        logger.debug("← {}", response);
         if (!response.startsWith(Constants.SMTP_OK)) {
             throw new SmtpException(command, response, "EHLO failed");
         }
-        System.out.println("✓ EHLO successful");
+        logger.info("EHLO successful");
     }
 
     /**
@@ -100,11 +101,11 @@ public class SmtpSender {
     private void startTLS(String host) throws SmtpException {
         try {
             String command = Constants.SMTP_STARTTLS;
-            System.out.println("→ " + command);
+            logger.debug("→ {}", command);
             writer.println(command);
 
             String response = readResponse();
-            System.out.println("← " + response);
+            logger.debug("← {}", response);
 
             if (!response.startsWith(Constants.SMTP_READY)) {
                 throw new SmtpException(command, response, "STARTTLS failed");
@@ -118,7 +119,7 @@ public class SmtpSender {
             // Send EHLO again after TLS
             sendEhlo();
 
-            System.out.println("✓ TLS established");
+            logger.info("TLS established");
         } catch (IOException e) {
             throw new SmtpException("STARTTLS failed: " + e.getMessage(), e);
         }
@@ -135,11 +136,11 @@ public class SmtpSender {
         try {
             // AUTH LOGIN
             String command = Constants.SMTP_AUTH_LOGIN;
-            System.out.println("→ " + command);
+            logger.debug("→ {}", command);
             writer.println(command);
 
             String response = readResponse();
-            System.out.println("← " + response);
+            logger.debug("← {}", response);
 
             if (!response.startsWith(Constants.SMTP_AUTH_CONTINUE)) {
                 throw new SmtpException(command, response, "AUTH LOGIN not accepted");
@@ -147,11 +148,11 @@ public class SmtpSender {
 
             // Send base64 encoded username
             String encodedUser = NetworkUtils.base64Encode(username);
-            System.out.println("→ " + encodedUser + " (username)");
+            logger.debug("→ {} (username)", encodedUser);
             writer.println(encodedUser);
 
             response = readResponse();
-            System.out.println("← " + response);
+            logger.debug("← {}", response);
 
             if (!response.startsWith("334")) {
                 throw new SmtpException("Username rejected");
@@ -159,18 +160,18 @@ public class SmtpSender {
 
             // Send base64 encoded password
             String encodedPass = NetworkUtils.base64Encode(password);
-            System.out.println("→ **** (password)");
+            logger.debug("→ **** (password)");
             writer.println(encodedPass);
 
             response = readResponse();
-            System.out.println("← " + response);
+            logger.debug("← {}", response);
 
             if (!response.startsWith("235")) {
                 throw new SmtpException("Authentication failed");
             }
 
             authenticated = true;
-            System.out.println("✓ Authentication successful");
+            logger.info("Authentication successful");
         } catch (SmtpException e) {
             throw e;
         } catch (Exception e) {
@@ -189,11 +190,11 @@ public class SmtpSender {
         try {
             // MAIL FROM
             String mailFrom = "MAIL FROM:<" + email.getFrom() + ">";
-            System.out.println("→ " + mailFrom);
+            logger.debug("→ {}", mailFrom);
             writer.println(mailFrom);
 
             String response = readResponse();
-            System.out.println("← " + response);
+            logger.debug("← {}", response);
             if (!response.startsWith(Constants.SMTP_OK)) {
                 throw new SmtpException(mailFrom, response, "MAIL FROM rejected");
             }
@@ -201,22 +202,22 @@ public class SmtpSender {
             // RCPT TO
             for (String to : email.getTo()) {
                 String rcptTo = "RCPT TO:<" + to + ">";
-                System.out.println("→ " + rcptTo);
+                logger.debug("→ {}", rcptTo);
                 writer.println(rcptTo);
 
                 response = readResponse();
-                System.out.println("← " + response);
+                logger.debug("← {}", response);
                 if (!response.startsWith(Constants.SMTP_OK)) {
                     throw new SmtpException(rcptTo, response, "RCPT TO rejected: " + to);
                 }
             }
 
             // DATA
-            System.out.println("→ DATA");
+            logger.debug("→ DATA");
             writer.println("DATA");
 
             response = readResponse();
-            System.out.println("← " + response);
+            logger.debug("← {}", response);
             if (!response.startsWith(Constants.SMTP_START_MAIL)) {
                 throw new SmtpException("DATA", response, "DATA command rejected");
             }
@@ -225,16 +226,16 @@ public class SmtpSender {
             sendEmailContent(email);
 
             // End with .
-            System.out.println("→ .");
+            logger.debug("→ .");
             writer.println(".");
 
             response = readResponse();
-            System.out.println("← " + response);
+            logger.debug("← {}", response);
             if (!response.startsWith(Constants.SMTP_OK)) {
                 throw new SmtpException("Email rejected by server");
             }
 
-            System.out.println("✓ Email sent successfully");
+            logger.info("Email sent successfully");
         } catch (SmtpException e) {
             throw e;
         } catch (Exception e) {
@@ -326,7 +327,6 @@ public class SmtpSender {
     }
 
 
-
     /**
      * Quit và đóng kết nối
      */
@@ -334,14 +334,14 @@ public class SmtpSender {
         if (!connected) return;
 
         try {
-            System.out.println("→ QUIT");
+            logger.debug("→ QUIT");
             writer.println("QUIT");
 
             String response = readResponse();
-            System.out.println("← " + response);
+            logger.debug("← {}", response);
 
             close();
-            System.out.println("✓ Connection closed");
+            logger.info("Connection closed");
         } catch (Exception e) {
             throw new SmtpException("QUIT failed: " + e.getMessage(), e);
         }
@@ -378,7 +378,7 @@ public class SmtpSender {
             String line;
             while ((line = reader.readLine()) != null) {
                 response.append(line).append("\n");
-                System.out.println("← " + line);
+                logger.debug("← {}", line);
 
                 // Multiline response có format: "250-..." hoặc "250 ..." (dòng cuối)
                 if (line.length() >= 4 && line.charAt(3) == ' ') {

@@ -35,7 +35,8 @@ public class ImapLoginDialog extends JDialog {
         super(parent, "Connect to Email Server", true);
         this.imapController = controller;
         initComponents();
-        setSize(new Dimension(550, 450));
+        pack();
+        setMinimumSize(new Dimension(550, 450));
         setLocationRelativeTo(parent);
     }
 

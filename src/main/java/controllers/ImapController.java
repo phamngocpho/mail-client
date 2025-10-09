@@ -2,6 +2,8 @@ package controllers;
 
 import components.panels.dashboard.Inbox;
 import models.Email;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import protocols.imap.ImapParser;
 import raven.toast.Notifications;
 import services.ImapService;
@@ -17,6 +19,7 @@ public class ImapController {
     private final Inbox inboxPanel;
     private final ImapService imapService;
     private String currentFolder = "INBOX";
+    private static final Logger logger = LoggerFactory.getLogger(ImapController.class);
 
     public ImapController(Inbox inboxPanel) {
         this.inboxPanel = inboxPanel;
@@ -35,10 +38,7 @@ public class ImapController {
         List<Email> emails = imapService.fetchRecentEmails(currentFolder, 11);
 
         // Update UI on EDT
-        SwingUtilities.invokeLater(() -> {
-            inboxPanel.loadEmails(emails);
-            System.out.println("✓ Connected successfully! Loaded " + emails.size() + " emails.");
-        });
+        updateInboxWithEmails(emails);
     }
 
     /**
@@ -63,8 +63,7 @@ public class ImapController {
             protected void done() {
                 try {
                     List<Email> emails = get();
-                    inboxPanel.loadEmails(emails);
-                    System.out.println("✓ Connected successfully! Loaded " + emails.size() + " emails.");
+                    updateInboxWithEmails(emails);
                 } catch (Exception e) {
                     showError("Failed to connect: " + e.getMessage());
                 }
@@ -145,9 +144,10 @@ public class ImapController {
             protected void done() {
                 try {
                     get();
-                    System.out.println("✓ Flags synced with server");
+                    logger.info("Flags synced with server");
                 } catch (Exception e) {
                     showError("Failed to update flags: " + e.getMessage());
+                    logger.error("Failed to update flags: {}", e.getMessage());
                 }
             }
         };
@@ -272,5 +272,16 @@ public class ImapController {
      */
     private void showError(String message) {
         Notifications.getInstance().show(Notifications.Type.ERROR, message);
+    }
+
+    /**
+     * Update inbox panel with emails và log thông tin
+     * Method chung để tránh duplicate code
+     */
+    private void updateInboxWithEmails(List<Email> emails) {
+        SwingUtilities.invokeLater(() -> {
+            inboxPanel.loadEmails(emails);
+            logger.info("Connected successfully! Loaded {} emails", emails.size());
+        });
     }
 }
