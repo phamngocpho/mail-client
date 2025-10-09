@@ -1,8 +1,6 @@
 package components.dialogs;
 
 import com.formdev.flatlaf.FlatClientProperties;
-import components.notifications.popup.GlassPanePopup;
-import components.notifications.popup.component.SimplePopupBorder;
 import controllers.ImapController;
 import controllers.SmtpController;
 import net.miginfocom.swing.MigLayout;

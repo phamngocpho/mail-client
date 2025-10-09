@@ -2,9 +2,7 @@ package application;
 
 import com.formdev.flatlaf.fonts.roboto.FlatRobotoFont;
 import com.formdev.flatlaf.themes.FlatMacDarkLaf;
-import components.notifications.custom.CustomNotification;
 import components.forms.FormsManager;
-import components.notifications.popup.GlassPanePopup;
 import components.panels.welcome.Welcome;
 import raven.toast.Notifications;
 import values.Value;
@@ -14,7 +12,6 @@ import java.awt.*;
 
 public class Application extends JFrame {
     public Application() {
-        GlassPanePopup.install(this);
         init();
     }
 
@@ -23,8 +20,6 @@ public class Application extends JFrame {
         Notifications.getInstance().show(Notifications.Type.SUCCESS, Notifications.Location.TOP_CENTER, "Welcome");
         setSize((int) Value.dimension.getWidth(), (int) (Value.dimension.getHeight() - Value.taskBarSize));
         Notifications.getInstance().setJFrame(this);
-        CustomNotification customNotification = new CustomNotification();
-        customNotification.setJFrame(this);
         setLocationRelativeTo(null);
         setContentPane(new Welcome());
         setMinimumSize(new Dimension((int) (Value.dimension.getWidth() / 2), (int) Value.dimension.getHeight() * 3 / 5));
