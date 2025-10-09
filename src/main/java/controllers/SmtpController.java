@@ -75,7 +75,7 @@ public class SmtpController {
         this.password = password;
         this.isConfigured = true;
 
-        System.out.println("SMTP configured: " + username + "@" + host);
+        logger.info("SMTP configured: {} @ {}", username, host);
     }
 
     /**
@@ -106,7 +106,7 @@ public class SmtpController {
             // Send email
             smtpService.sendEmail(email);
 
-            System.out.println("✓ Email sent successfully to " + email.getTo());
+            logger.info("Email sent successfully to {}", email.getTo());
 
             return true;
 

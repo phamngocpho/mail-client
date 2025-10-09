@@ -24,7 +24,7 @@ public class ConfigUtils {
         try (InputStream input = new FileInputStream(Value.resources + "local.properties")) {
             properties.load(input);
             loaded = true;
-            System.out.println("✓ Loaded local.properties successfully");
+            logger.info("Loaded local.properties successfully");
         } catch (IOException e) {
             logger.error("Cannot load local.properties: {}", e.getMessage());
             Notifications.getInstance().show(Notifications.Type.ERROR, "Cannot load local.properties!");
