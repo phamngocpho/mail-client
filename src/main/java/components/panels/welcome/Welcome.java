@@ -1,7 +1,6 @@
 package components.panels.welcome;
 
 import com.formdev.flatlaf.FlatClientProperties;
-import components.buttons.GradientButton;
 import components.forms.FormsManager;
 import components.panels.MainPanel;
 import net.miginfocom.swing.MigLayout;
