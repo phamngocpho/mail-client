@@ -21,8 +21,6 @@ public class Compose extends JPanel {
     private JTextField toField;
     private JTextField subjectField;
     private JTextArea bodyArea;
-    private JPanel ccPanel;
-    private JPanel bccPanel;
     private JTextField ccField;
     private JTextField bccField;
     private boolean ccVisible = false;
@@ -31,8 +29,6 @@ public class Compose extends JPanel {
 
     private final List<File> attachments = new ArrayList<>();
     private final int iconSize = Value.defaultIconSize - 3;
-
-
 
     private final SmtpController controller;
     private JButton fromSelector;
@@ -51,63 +47,49 @@ public class Compose extends JPanel {
     private void init() {
         setLayout(new MigLayout(
                 "fillx,insets 10",
-                "[grow,fill]",
-                "[][][][][][] [grow,fill] []"
+                "[60!][grow,fill][fill]",
+                "[][][][][][1!][grow,fill][][]"
         ));
 
-
         // To field
-        JPanel toPanel = createFieldPanel("To", true);
-        toField = new JTextField();
-        toField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Search or add a contact");
-        toField.putClientProperty(FlatClientProperties.STYLE, "arc: 30");
-        toPanel.add(toField, "growx,pushx, h 25!");
-
-        // CC/BCC labels
-        JPanel ccBccPanel = getCcBccPanel();
-        toPanel.add(ccBccPanel);
-
-        add(toPanel, "wrap,growx");
+        add(new JLabel("To"), "");
+        toField = createTextField("Search or add a contact");
+        toField.putClientProperty(FlatClientProperties.TEXT_FIELD_PADDING, new Insets(0, 4, 0, 4));
+        add(toField, "growx,h 25!");
+        add(getCcBccPanel(), "wrap, al right");
 
         // CC field (hidden by default)
-        ccPanel = createFieldPanel("CC", false);
-        ccField = new JTextField();
-        ccField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Add CC recipients");
-        ccField.putClientProperty(FlatClientProperties.STYLE, "arc: 30");
-        ccPanel.add(ccField, "growx, h 25!");
-        ccPanel.setVisible(false);
-        add(ccPanel, "wrap,growx");
+        JLabel ccLabel = new JLabel("CC");
+        ccLabel.setVisible(false);
+        add(ccLabel, "");
+        ccField = createTextField("Add CC recipients");
+        ccField.setVisible(false);
+        ccField.putClientProperty(FlatClientProperties.TEXT_FIELD_PADDING, new Insets(0, 4, 0, 4));
+        add(ccField, "growx,h 25!,span,wrap");
 
         // BCC field (hidden by default)
-        bccPanel = createFieldPanel("BCC", false);
-        bccField = new JTextField();
-        bccField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Add BCC recipients");
-        bccField.putClientProperty(FlatClientProperties.STYLE, "arc: 30");
-        bccPanel.add(bccField, "growx, h 25!");
-        bccPanel.setVisible(false);
-        add(bccPanel, "wrap,growx");
+        JLabel bccLabel = new JLabel("BCC");
+        bccLabel.setVisible(false);
+        add(bccLabel, "");
+        bccField = createTextField("Add BCC recipients");
+        bccField.setVisible(false);
+        bccField.putClientProperty(FlatClientProperties.TEXT_FIELD_PADDING, new Insets(0, 4, 0, 4));
+        add(bccField, "growx,h 25!,span,wrap");
 
         // Subject field
-        JPanel subjectPanel = createFieldPanel("Subject", false);
-        subjectField = new JTextField();
-        subjectField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Add a subject");
-        subjectField.putClientProperty(FlatClientProperties.STYLE, "arc: 30");
-        subjectPanel.add(subjectField, "growx, h 25!");
-        add(subjectPanel, "wrap,growx");
+        add(new JLabel("Subject"), "");
+        subjectField = createTextField("Add a subject");
+        subjectField.putClientProperty(FlatClientProperties.TEXT_FIELD_PADDING, new Insets(0, 4, 0, 4));
+        add(subjectField, "growx,h 25!,span,wrap");
 
         // From field
-        JPanel fromPanel = createFieldPanel("From", false);
-        JButton fromSelector = createFromSelector();
+        add(new JLabel("From"), "");
 
-        JLabel avatarLabel = new JLabel();
-        avatarLabel.setPreferredSize(new Dimension(32, 32));
-        avatarLabel.setOpaque(true);
-        fromPanel.add(avatarLabel, "w 32!,h 32!");
-        fromPanel.add(fromSelector, "growx, al right, h 28!, w ::30%");
-        add(fromPanel, "wrap,growx");
+        fromSelector = createFromSelector();
+        add(fromSelector, "grow,al right,h 28!, span, w ::30%, wrap");
 
         // Separator
-        add(new JSeparator(), "wrap,growx,h 1!");
+        add(new JSeparator(), "span,growx,h 1!,wrap");
 
         // Body area
         bodyArea = new JTextArea();
@@ -122,16 +104,27 @@ public class Compose extends JPanel {
 
         JScrollPane scrollPane = new JScrollPane(bodyArea);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
-        add(scrollPane, "wrap,grow,push");
+        add(scrollPane, "span,grow,push,wrap");
 
-        // Attachment panel (hiển thị file đính kèm)
+        // Attachment panel
         attachmentPanel = new JPanel(new MigLayout("wrap 1", "[grow]", "[]"));
         attachmentPanel.setOpaque(false);
-        add(attachmentPanel, "wrap,growx");
+        add(attachmentPanel, "span,growx,wrap");
 
         // Bottom toolbar
-        add(createToolbarPanel(), "growx,h 60!");
+        add(createToolbarPanel(), "span,growx,h 60!");
         setBorder(BorderFactory.createMatteBorder(0, 2, 0, 0, Value.dark_gray));
+    }
+
+    private JTextField createTextField(String placeholder) {
+        JTextField field = new JTextField();
+        field.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, placeholder);
+        field.putClientProperty(FlatClientProperties.STYLE,
+                "arc: 30; " +
+                        "focusWidth: 0; " +
+                        "borderColor: " + String.format("#%06X", (UIManager.getColor("Component.borderColor").getRGB() & 0x3e3e3e)) + "; " +
+                        "focusedBorderColor: " + String.format("#%06X", (UIManager.getColor("Component.borderColor").getRGB() & 0x3e3e3e)));
+        return field;
     }
 
     private JButton createFromSelector() {
@@ -141,52 +134,34 @@ public class Compose extends JPanel {
         fromSelector.setFocusPainted(false);
         fromSelector.setCursor(new Cursor(Cursor.HAND_CURSOR));
         fromSelector.setBackground(Value.dark_gray);
-
         fromSelector.addActionListener(e -> showEmailSelector());
-
         updateFromEmail();
-
         return fromSelector;
     }
-
-
 
     private JPanel getCcBccPanel() {
         JPanel ccBccPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         ccBccPanel.setOpaque(false);
 
-        JLabel ccLabel = new JLabel("CC");
-        ccLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        ccLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+        JLabel ccLabelBtn = new JLabel("CC");
+        ccLabelBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        ccLabelBtn.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseClicked(java.awt.event.MouseEvent evt) {
                 toggleCc();
             }
         });
 
-        JLabel bccLabel = new JLabel("BCC");
-        bccLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        bccLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+        JLabel bccLabelBtn = new JLabel("BCC");
+        bccLabelBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        bccLabelBtn.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseClicked(java.awt.event.MouseEvent evt) {
                 toggleBcc();
             }
         });
 
-        ccBccPanel.add(ccLabel);
-        ccBccPanel.add(bccLabel);
+        ccBccPanel.add(ccLabelBtn);
+        ccBccPanel.add(bccLabelBtn);
         return ccBccPanel;
-    }
-
-    private JPanel createFieldPanel(String label, boolean isToField) {
-        JPanel panel = new JPanel(new MigLayout(
-                "fillx,insets 0",
-                "[60!]" + (isToField ? "[grow,fill][]" : "[grow,fill]"),
-                "[]"
-        ));
-
-        JLabel labelComp = new JLabel(label);
-        panel.add(labelComp);
-
-        return panel;
     }
 
     private JButton createToolbarButton(String iconPath, ActionListener listener) {
@@ -215,7 +190,6 @@ public class Compose extends JPanel {
 
         panel.add(new JLabel(), "pushx,growx");
 
-        // Send button
         JButton sendBtn = new JButton("Send");
         sendBtn.setFocusPainted(false);
         sendBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
@@ -228,9 +202,18 @@ public class Compose extends JPanel {
 
     private void toggleCc() {
         ccVisible = !ccVisible;
-        ccPanel.setVisible(ccVisible);
-        if (ccVisible) {
-            ccField.requestFocus();
+        Component[] components = getComponents();
+        for (int i = 0; i < components.length; i++) {
+            if (components[i] instanceof JLabel && ((JLabel) components[i]).getText().equals("CC")) {
+                components[i].setVisible(ccVisible);
+                if (i + 1 < components.length && components[i + 1] == ccField) {
+                    ccField.setVisible(ccVisible);
+                    if (ccVisible) {
+                        ccField.requestFocus();
+                    }
+                }
+                break;
+            }
         }
         revalidate();
         repaint();
@@ -238,37 +221,39 @@ public class Compose extends JPanel {
 
     private void toggleBcc() {
         bccVisible = !bccVisible;
-        bccPanel.setVisible(bccVisible);
-        if (bccVisible) {
-            bccField.requestFocus();
+        Component[] components = getComponents();
+        for (int i = 0; i < components.length; i++) {
+            if (components[i] instanceof JLabel && ((JLabel) components[i]).getText().equals("BCC")) {
+                components[i].setVisible(bccVisible);
+                if (i + 1 < components.length && components[i + 1] == bccField) {
+                    bccField.setVisible(bccVisible);
+                    if (bccVisible) {
+                        bccField.requestFocus();
+                    }
+                }
+                break;
+            }
         }
         revalidate();
         repaint();
     }
 
-    /**
-     * Send email - tương tự như connect() trong Inbox
-     */
     private void sendEmail() {
-        // Validate
         if (!validateForm()) {
             return;
         }
 
-        // Check if SMTP configured
         if (!controller.isConfigured()) {
             showError("SMTP not configured. Please login first.");
             return;
         }
 
-        // Show loading state
         JButton sendBtn = findSendButton();
         if (sendBtn != null) {
             sendBtn.setEnabled(false);
             sendBtn.setText("Sending...");
         }
 
-        // Send in background thread
         SwingWorker<Boolean, Void> worker = new SwingWorker<>() {
             @Override
             protected Boolean doInBackground() {
@@ -325,7 +310,6 @@ public class Compose extends JPanel {
         Email email = new Email();
         email.setFrom(fromSelector.getText().trim());
 
-        // Parse To addresses
         String[] toAddresses = toField.getText().split("[,;]");
         for (String addr : toAddresses) {
             String trimmed = addr.trim();
@@ -334,7 +318,6 @@ public class Compose extends JPanel {
             }
         }
 
-        // Parse CC addresses
         if (ccVisible && !ccField.getText().trim().isEmpty()) {
             String[] ccAddresses = ccField.getText().split("[,;]");
             for (String addr : ccAddresses) {
@@ -344,6 +327,7 @@ public class Compose extends JPanel {
                 }
             }
         }
+
         for (File file : attachments) {
             email.addAttachment(file);
         }
@@ -360,14 +344,24 @@ public class Compose extends JPanel {
         bccField.setText("");
         subjectField.setText("");
         bodyArea.setText("");
-        ccPanel.setVisible(false);
-        bccPanel.setVisible(false);
+
+        Component[] components = getComponents();
+        for (Component comp : components) {
+            if (comp instanceof JLabel label) {
+                if ("CC".equals(label.getText()) || "BCC".equals(label.getText())) {
+                    label.setVisible(false);
+                }
+            }
+        }
+        ccField.setVisible(false);
+        bccField.setVisible(false);
         ccVisible = false;
         bccVisible = false;
-        revalidate();
-        repaint();
+
         attachments.clear();
         attachmentPanel.removeAll();
+        revalidate();
+        repaint();
     }
 
     private JButton findSendButton() {
@@ -405,7 +399,6 @@ public class Compose extends JPanel {
         String fileName = file.getName().toLowerCase();
         String iconPath = "icons/compose/files/";
 
-        // Xác định icon dựa trên đuôi file
         if (fileName.endsWith(".txt")) {
             iconPath += "txt.svg";
         } else if (fileName.endsWith(".pdf")) {
@@ -435,7 +428,6 @@ public class Compose extends JPanel {
         return new FlatSVGIcon(iconPath, iconSize, iconSize);
     }
 
-
     private void addAttachmentToPanel(File file) {
         JPanel fileItem = new JPanel(new MigLayout("insets 5, fillx", "[grow][]"));
         fileItem.setBackground(new Color(40, 40, 40));
@@ -460,9 +452,6 @@ public class Compose extends JPanel {
         attachmentPanel.add(fileItem, "growx, wrap");
     }
 
-    /**
-     * Update email display - tự động gọi khi controller configured
-     */
     private void updateFromEmail() {
         SwingUtilities.invokeLater(() -> {
             if (fromSelector != null) {
@@ -487,14 +476,10 @@ public class Compose extends JPanel {
         }
     }
 
-    /**
-     * Show error dialog
-     */
     private void showError(String message) {
         Notifications.getInstance().show(Notifications.Type.ERROR, message);
     }
 
-    // Getters
     public String getTo() {
         return toField.getText();
     }

@@ -8,9 +8,7 @@ import utils.Constants;
 import utils.NetworkUtils;
 
 import javax.net.ssl.SSLSocket;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.PrintWriter;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -151,7 +149,7 @@ public class ImapClient {
         }
 
         String tag = nextTag();
-        String command = String.format("%s FETCH %d BODY[TEXT]", tag, messageNumber);
+        String command = String.format("%s FETCH %d (BODY[])", tag, messageNumber);
 
         logger.debug("→ {}", command);
         sendCommand(command);
@@ -389,6 +387,19 @@ public class ImapClient {
                     email.setBody(emailBody.plainText);
                     email.setBodyHtml(emailBody.html);
                     email.setHtml(!emailBody.html.isEmpty());
+
+                    // Save attachments
+                    for (ImapParser.Attachment att : emailBody.attachments) {
+                        try {
+                            File tempFile = File.createTempFile("email_", "_" + att.filename);
+                            try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+                                fos.write(att.data);
+                            }
+                            email.addAttachment(tempFile);
+                        } catch (Exception e) {
+                            logger.error("Failed to save attachment: {}", att.filename, e);
+                        }
+                    }
                     emails.add(email);
                 }
             }

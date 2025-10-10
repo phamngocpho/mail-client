@@ -17,10 +17,24 @@ public class ImapParser {
     public static class EmailBody {
         public String plainText;
         public String html;
+        public List<Attachment> attachments;
 
         public EmailBody() {
             this.plainText = "";
             this.html = "";
+            this.attachments = new ArrayList<>();
+        }
+    }
+
+    public static class Attachment {
+        public String filename;
+        public String contentType;
+        public byte[] data;
+
+        public Attachment(String filename, String contentType, byte[] data) {
+            this.filename = filename;
+            this.contentType = contentType;
+            this.data = data;
         }
     }
     /**
@@ -226,6 +240,8 @@ public class ImapParser {
 
     public static EmailBody parseEmailBody(String response) {
         EmailBody emailBody = extractRawBody(response);
+        String boundary = detectBoundary(response);
+        emailBody.attachments = parseAttachments(response, boundary);
         if (emailBody.plainText.isEmpty() && emailBody.html.isEmpty()) {
             return emailBody;
         }
@@ -308,6 +324,110 @@ public class ImapParser {
         }
 
         return body;
+    }
+
+    /**
+     * Parse attachments từ multipart response
+     */
+    private static List<Attachment> parseAttachments(String response, String boundary) {
+        List<Attachment> attachments = new ArrayList<>();
+
+        logger.info("=== PARSING ATTACHMENTS ===");
+        logger.info("Boundary: {}", boundary);
+        logger.info("Response length: {}", response.length());
+
+        if (boundary == null) {
+            logger.info("No boundary found - checking for single attachment");
+            // Có thể là email chỉ có 1 attachment không dùng multipart
+            return attachments;
+        }
+
+        String[] parts = response.split(Pattern.quote(boundary), -1);
+        logger.info("Total parts split by boundary: {}", parts.length);
+
+        for (int i = 1; i < parts.length - 1; i++) {
+            String part = parts[i].trim();
+
+            // Log first 500 chars of each part
+            logger.debug("Part {} preview: {}", i, part.substring(0, Math.min(500, part.length())));
+
+            boolean hasDisposition = part.toLowerCase().contains("content-disposition:");
+            boolean hasAttachment = part.toLowerCase().contains("attachment");
+            logger.info("Part {}: hasDisposition={}, hasAttachment={}", i, hasDisposition, hasAttachment);
+
+            if (hasDisposition && hasAttachment) {
+                // Extract filename
+                Pattern filenamePattern = Pattern.compile("filename=\"?([^\"\\r\\n]+)\"?", Pattern.CASE_INSENSITIVE);
+                Matcher matcher = filenamePattern.matcher(part);
+                String filename = matcher.find() ? matcher.group(1) : "unknown";
+
+                logger.info(">>> Found attachment: {}", filename);
+
+                // Extract content type
+                Pattern typePattern = Pattern.compile("Content-Type:\\s*([^;\\r\\n]+)", Pattern.CASE_INSENSITIVE);
+                Matcher typeMatcher = typePattern.matcher(part);
+                String contentType = typeMatcher.find() ? typeMatcher.group(1).trim() : "application/octet-stream";
+
+                logger.info("    Content-Type: {}", contentType);
+
+                // Extract encoding
+                String encoding = detectEncodingForPart(response, part);
+                logger.info("    Encoding: {}", encoding);
+
+                // Extract data
+                int headerEnd = part.indexOf("\r\n\r\n");
+                if (headerEnd != -1) {
+                    String content = part.substring(headerEnd + 4).trim();
+                    logger.info("    Content length: {}", content.length());
+
+                    byte[] data = decodeAttachmentData(content, encoding);
+                    logger.info("    Decoded data length: {} bytes", data.length);
+
+                    attachments.add(new Attachment(filename, contentType, data));
+                } else {
+                    logger.warn("    Cannot find header end for attachment");
+                }
+            }
+        }
+
+        logger.info("=== TOTAL ATTACHMENTS FOUND: {} ===", attachments.size());
+        return attachments;
+    }
+
+    private static byte[] decodeAttachmentData(String content, String encoding) {
+        try {
+            encoding = encoding.toLowerCase().trim();
+
+            switch (encoding) {
+                case "base64":
+                    String cleanBase64 = content.replaceAll("[\r\n]+", "").replaceAll("\\s+", "");
+                    while (cleanBase64.length() % 4 != 0) {
+                        cleanBase64 += "=";
+                    }
+                    if (isValidBase64(cleanBase64)) {
+                        return Base64.getDecoder().decode(cleanBase64);
+                    }
+                    break;
+
+                case "quoted-printable":
+                    return decodeQuotedPrintable(content).getBytes(StandardCharsets.UTF_8);
+
+                case "7bit":
+                case "8bit":
+                case "binary":
+                    // Binary data - KHÔNG decode, trả về raw bytes
+                    return content.getBytes(StandardCharsets.ISO_8859_1);
+
+                default:
+                    logger.warn("Unknown encoding: {}, treating as binary", encoding);
+                    return content.getBytes(StandardCharsets.ISO_8859_1);
+            }
+        } catch (Exception e) {
+            logger.error("Decode attachment error: {}", e.getMessage());
+        }
+
+        // Fallback
+        return content.getBytes(StandardCharsets.ISO_8859_1);
     }
 
     /**
