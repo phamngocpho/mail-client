@@ -2,6 +2,8 @@ package services;
 
 import models.Email;
 import models.Folder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import protocols.imap.ImapClient;
 import protocols.imap.ImapException;
 import protocols.imap.ImapParser;
@@ -10,10 +12,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ImapService {
-    private ImapClient client;
+    private final ImapClient client;
     private String currentHost;
     private String currentUser;
     private boolean isConnected = false;
+    private final Logger logger = LoggerFactory.getLogger(ImapService.class);
 
     public ImapService() {
         this.client = new ImapClient();
@@ -232,7 +235,7 @@ public class ImapService {
                 client.logout();
             }
         } catch (ImapException e) {
-            e.printStackTrace();
+            logger.error(e.getMessage(), e);
         } finally {
             client.close();
             isConnected = false;

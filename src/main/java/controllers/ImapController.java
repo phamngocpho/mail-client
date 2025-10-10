@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import protocols.imap.ImapParser;
 import raven.toast.Notifications;
 import services.ImapService;
+import utils.Constants;
 
 import javax.swing.*;
 import java.io.File;
@@ -37,7 +38,7 @@ public class ImapController {
         imapService.connect(host, email, password);
 
         // Fetch emails from INBOX
-        List<Email> emails = imapService.fetchRecentEmails(currentFolder, 11);
+        List<Email> emails = imapService.fetchRecentEmails(currentFolder, Constants.EMAIL_FETCH_SIZE);
 
         // Update UI on EDT
         updateInboxWithEmails(emails);
@@ -58,7 +59,7 @@ public class ImapController {
                 imapService.connect(host, email, password);
 
                 // Fetch emails from INBOX
-                return imapService.fetchRecentEmails(currentFolder, 11);
+                return imapService.fetchRecentEmails(currentFolder, Constants.EMAIL_FETCH_SIZE);
             }
 
             @Override
@@ -104,7 +105,7 @@ public class ImapController {
      * Refresh current folder
      */
     public void refresh() {
-        loadFolder(currentFolder, 11);
+        loadFolder(currentFolder, Constants.EMAIL_FETCH_SIZE);
     }
 
     /**

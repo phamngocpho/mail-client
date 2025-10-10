@@ -37,7 +37,7 @@ public class Inbox extends JPanel {
     private final int iconSize = Value.defaultIconSize - 5;
 
     // Controller
-    private ImapController controller;
+    private final ImapController controller;
 
     public Inbox() {
         emails = new ArrayList<>();
@@ -48,13 +48,6 @@ public class Inbox extends JPanel {
 
         // Hiển thị login dialog khi khởi động
         SwingUtilities.invokeLater(this::showLoginDialog);
-    }
-
-    /**
-     * Set controller (nếu muốn inject từ bên ngoài)
-     */
-    public void setController(ImapController controller) {
-        this.controller = controller;
     }
 
     private void loadIcons() {
@@ -143,16 +136,12 @@ public class Inbox extends JPanel {
         JMenuItem markReadItem = new JMenuItem(
                 email.hasFlag("Seen") ? "Mark as Unread" : "Mark as Read"
         );
-        markReadItem.addActionListener(ev -> {
-            controller.markAsRead(email, !email.hasFlag("Seen"));
-        });
+        markReadItem.addActionListener(ev -> controller.markAsRead(email, !email.hasFlag("Seen")));
         menu.add(markReadItem);
 
         // Delete
         JMenuItem deleteItem = new JMenuItem("Delete");
-        deleteItem.addActionListener(ev -> {
-            controller.deleteEmail(email);
-        });
+        deleteItem.addActionListener(ev -> controller.deleteEmail(email));
         menu.add(deleteItem);
 
         menu.show(emailTable, e.getX(), e.getY());

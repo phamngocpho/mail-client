@@ -43,4 +43,7 @@ public class Constants {
     public static final String SMTP_AUTH_CONTINUE = "334";
     public static final String SMTP_START_MAIL = "354";
     public static final String SMTP_CLOSING = "221";
+
+    // Number of emails to fetch per request
+    public static final int EMAIL_FETCH_SIZE = 30;
 }
