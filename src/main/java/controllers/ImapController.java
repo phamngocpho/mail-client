@@ -9,6 +9,8 @@ import raven.toast.Notifications;
 import services.ImapService;
 
 import javax.swing.*;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -243,9 +245,25 @@ public class ImapController {
                     email.setBody(emailBody.plainText);
                     email.setBodyHtml(emailBody.html);
                     email.setHtml(!emailBody.html.isEmpty());
+
+                    logger.info("Email body loaded. Attachments count: {}", emailBody.attachments.size());
+
+                    for (ImapParser.Attachment att : emailBody.attachments) {
+                        logger.info("Saving attachment: {} ({} bytes)", att.filename, att.data.length);
+                        File tempFile = File.createTempFile("email_", "_" + att.filename);
+                        try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+                            fos.write(att.data);
+                        }
+                        logger.info("Saved to: {}", tempFile.getAbsolutePath());
+                        email.addAttachment(tempFile);
+                    }
+
+                    logger.info("Total attachments added to email: {}", email.getAttachments().size());
+
                     inboxPanel.updateEmailBody(email);
                 } catch (Exception e) {
                     showError("Failed to load email body: " + e.getMessage());
+                    logger.error("Error loading email body", e);
                 }
             }
         };

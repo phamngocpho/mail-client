@@ -6,6 +6,7 @@ import components.dialogs.ImapLoginDialog;
 import controllers.ImapController;
 import net.miginfocom.swing.MigLayout;
 import models.Email;
+import raven.toast.Notifications;
 import values.Value;
 
 import javax.swing.*;
@@ -15,6 +16,7 @@ import javax.swing.table.JTableHeader;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -25,6 +27,7 @@ public class Inbox extends JPanel {
     private DefaultTableModel tableModel;
     private JLabel fromLabel, subjectLabel, dateLabel;
     private JTextArea bodyTextArea;
+    private JPanel attachmentsPanel;
     private List<Email> emails;
 
     // Star icons
@@ -327,6 +330,10 @@ public class Inbox extends JPanel {
         dateLabel.setForeground(Color.GRAY);
         detailPanel.add(dateLabel, "growx, wrap");
 
+        attachmentsPanel = new JPanel(new MigLayout("insets 0,fillx", "[grow]", "[]"));
+        attachmentsPanel.setVisible(false);
+        detailPanel.add(attachmentsPanel, "growx, wrap");
+
         // Body
         bodyTextArea = new JTextArea();
         bodyTextArea.setLineWrap(true);
@@ -353,6 +360,25 @@ public class Inbox extends JPanel {
 
         SimpleDateFormat sdf = new SimpleDateFormat("EEE, MMM dd, yyyy 'at' hh:mm a");
         dateLabel.setText(email.getDate() != null ? sdf.format(email.getDate()) : "");
+
+        // Show attachments if any
+        attachmentsPanel.removeAll();
+        if (!email.getAttachments().isEmpty()) {
+            attachmentsPanel.setVisible(true);
+            JLabel attachLabel = new JLabel("Attachments (" + email.getAttachments().size() + "):");
+            attachmentsPanel.add(attachLabel, "wrap");
+
+            for (File file : email.getAttachments()) {
+                JButton fileBtn = new JButton(file.getName());
+                fileBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+                fileBtn.addActionListener(e -> openAttachment(file));
+                attachmentsPanel.add(fileBtn, "wrap");
+            }
+        } else {
+            attachmentsPanel.setVisible(false);
+        }
+        attachmentsPanel.revalidate();
+        attachmentsPanel.repaint();
 
         // Nếu body chưa có, load từ server
         if (email.getBody() == null || email.getBody().isEmpty()) {
@@ -498,6 +524,23 @@ public class Inbox extends JPanel {
             label.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
             return label;
+        }
+    }
+
+    private void openAttachment(File file) {
+        try {
+            if (Desktop.isDesktopSupported()) {
+                Desktop desktop = Desktop.getDesktop();
+                if (file.exists()) {
+                    desktop.open(file);
+                } else {
+                    Notifications.getInstance().show(Notifications.Type.ERROR, "File not found: " + file.getName());
+                }
+            } else {
+                Notifications.getInstance().show(Notifications.Type.ERROR, "Desktop not supported on this platform");
+            }
+        } catch (Exception e) {
+            Notifications.getInstance().show(Notifications.Type.ERROR, "Cannot open file: " + e.getMessage());
         }
     }
 }
