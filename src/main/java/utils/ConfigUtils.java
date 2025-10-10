@@ -1,5 +1,4 @@
 package utils;
-import controllers.SmtpController;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import raven.toast.Notifications;

@@ -6,14 +6,11 @@ import controllers.SmtpController;
 import net.miginfocom.swing.MigLayout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import protocols.imap.ImapParser;
 import raven.toast.Notifications;
 import utils.ConfigUtils;
-import values.Value;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.datatransfer.DataFlavor;
 import java.util.Objects;
 
 /**

@@ -374,16 +374,15 @@ public class ImapParser {
                         content = content.substring(0, nextBoundary).trim();
                     }
 
-                    logger.info("=== Processing Attachment ===");
-                    logger.info("Attachment: {}", filename);
-                    logger.info("Content-Type: {}", contentType);
-                    logger.info("Encoding: {}", encoding);
-                    logger.info("Raw content length: {}", content.length());
+                    logger.debug("Attachment: {}", filename);
+                    logger.debug("Content-Type: {}", contentType);
+                    logger.debug("Encoding: {}", encoding);
+                    logger.debug("Raw content length: {}", content.length());
 
                     byte[] data = decodeAttachmentData(content, encoding);
 
-                    logger.info("Decoded data length: {}", data.length);
-                    logger.info("First 50 bytes: {}",
+                    logger.debug("Decoded data length: {}", data.length);
+                    logger.debug("First 50 bytes: {}",
                             Arrays.toString(Arrays.copyOf(data, Math.min(50, data.length))));
 
                     // Validate file signature
@@ -392,7 +391,7 @@ public class ImapParser {
                         int b2 = data[1] & 0xFF;
                         int b3 = data[2] & 0xFF;
                         int b4 = data[3] & 0xFF;
-                        logger.info("File signature: [0x{}, 0x{}, 0x{}, 0x{}]",
+                        logger.debug("File signature: [0x{}, 0x{}, 0x{}, 0x{}]",
                                 Integer.toHexString(b1),
                                 Integer.toHexString(b2),
                                 Integer.toHexString(b3),
@@ -400,13 +399,13 @@ public class ImapParser {
 
                         // Check file type
                         if (b1 == 0x50 && b2 == 0x4B && b3 == 0x03 && b4 == 0x04) {
-                            logger.info("✓ Valid ZIP/Office file (.docx/.xlsx/.pptx)");
+                            logger.debug("Valid ZIP/Office file (.docx/.xlsx/.pptx)");
                         } else if (b1 == 0x25 && b2 == 0x50 && b3 == 0x44 && b4 == 0x46) {
-                            logger.info("✓ Valid PDF file");
+                            logger.debug("Valid PDF file");
                         } else if (b1 == 0xFF && b2 == 0xD8 && b3 == 0xFF) {
-                            logger.info("✓ Valid JPEG file");
+                            logger.debug("Valid JPEG file");
                         } else if (b1 == 0x89 && b2 == 0x50 && b3 == 0x4E && b4 == 0x47) {
-                            logger.info("✓ Valid PNG file");
+                            logger.debug("Valid PNG file");
                         } else {
                             logger.warn("Unknown or corrupt file signature!");
                         }
@@ -675,5 +674,63 @@ public class ImapParser {
      */
     public static boolean isError(String response, String tag) {
         return response.contains(tag + " NO") || response.contains(tag + " BAD");
+    }
+
+    /**
+     * Decode filename từ RFC 2047 format
+     * Example: =?UTF-8?B?4bqibmgg...?= -> Ảnh chụp màn hình.png
+     */
+    public static String decodeFilename(String filename) {
+        if (filename == null || filename.isEmpty()) {
+            return "attachment";
+        }
+
+        // Nếu không phải encoded format, trả về nguyên bản
+        if (!filename.startsWith("=?") || !filename.endsWith("?=")) {
+            return filename;
+        }
+
+        try {
+            // Pattern: =?charset?encoding?encoded-text?=
+            Pattern pattern = Pattern.compile("=\\?([^?]+)\\?([BQ])\\?([^?]+)\\?=", Pattern.CASE_INSENSITIVE);
+            Matcher matcher = pattern.matcher(filename);
+
+            StringBuilder result = new StringBuilder();
+            int lastEnd = 0;
+
+            while (matcher.find()) {
+                // Append text trước encoded part
+                result.append(filename, lastEnd, matcher.start());
+
+                String charset = matcher.group(1);
+                String encoding = matcher.group(2).toUpperCase();
+                String encodedText = matcher.group(3);
+
+                // Decode
+                byte[] decodedBytes;
+                if (encoding.equals("B")) {
+                    // Base64
+                    decodedBytes = Base64.getDecoder().decode(encodedText);
+                } else {
+                    // Quoted-Printable
+                    decodedBytes = decodeQuotedPrintable(encodedText).getBytes(StandardCharsets.ISO_8859_1);
+                }
+
+                // Convert to string với charset
+                String decoded = new String(decodedBytes, charset);
+                result.append(decoded);
+
+                lastEnd = matcher.end();
+            }
+
+            // Append phần còn lại
+            result.append(filename.substring(lastEnd));
+
+            return result.toString();
+
+        } catch (Exception e) {
+            logger.error("Failed to decode filename: {}", filename, e);
+            return filename; // Fallback
+        }
     }
 }

@@ -11,6 +11,8 @@ import javax.net.ssl.SSLSocket;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class ImapClient {
     private SSLSocket socket;
@@ -358,7 +360,10 @@ public class ImapClient {
                     if (size > 0) {
                         // Đọc binary data
                         char[] buffer = new char[size];
-                        reader.read(buffer, 0, size);
+                        int bytesRead = reader.read(buffer, 0, size);
+                        if (bytesRead != size) {
+                            logger.warn("Expected {} bytes but read {} bytes", size, bytesRead);
+                        }
                         response.append(buffer);
                         response.append("\r\n");
                     }
@@ -378,13 +383,18 @@ public class ImapClient {
     // Helper method để extract size từ literal
     private int extractLiteralSize(String line) {
         try {
-            int start = line.lastIndexOf("{");
-            int end = line.lastIndexOf("}");
-            if (start >= 0 && end > start) {
-                return Integer.parseInt(line.substring(start + 1, end));
+            // IMAP literal format: {123}\r\n
+            // Phải ở cuối dòng, theo sau bởi \r\n hoặc }
+            Pattern literalPattern = Pattern.compile("\\{(\\d+)}\\s*$");
+            Matcher matcher = literalPattern.matcher(line);
+
+            if (matcher.find()) {
+                int size = Integer.parseInt(matcher.group(1));
+                logger.debug("Found literal size: {}", size);
+                return size;
             }
         } catch (Exception e) {
-            logger.error(e.getMessage(), e);
+            logger.debug("Not a valid IMAP literal: {}", line);
         }
         return 0;
     }
@@ -418,13 +428,36 @@ public class ImapClient {
                     // Save attachments
                     for (ImapParser.Attachment att : emailBody.attachments) {
                         try {
-                            File tempFile = File.createTempFile("email_", "_" + att.filename);
-                            try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+                            // Decode và sanitize filename
+                            String decodedFilename = ImapParser.decodeFilename(att.filename);
+                            String safeFilename = sanitizeFilename(decodedFilename);
+
+                            logger.debug("Original filename: {}", att.filename);
+                            logger.debug("Decoded filename: {}", decodedFilename);
+                            logger.debug("Safe filename: {}", safeFilename);
+
+                            // Tạo thư mục attachments trong project
+                            File attachmentDir = new File("attachments");
+                            if (!attachmentDir.exists() && !attachmentDir.mkdirs()) {
+                                logger.error("Failed to create attachments directory: {}",
+                                        attachmentDir.getAbsolutePath());
+                                continue;
+                            }
+
+                            // Lưu file với tên gốc
+                            File attachmentFile = new File(attachmentDir, safeFilename);
+                            try (FileOutputStream fos = new FileOutputStream(attachmentFile)) {
                                 fos.write(att.data);
                             }
-                            email.addAttachment(tempFile);
+
+                            email.addAttachment(attachmentFile);
+                            logger.info("Saved attachment: {}", attachmentFile.getAbsolutePath());
+
                         } catch (Exception e) {
-                            logger.error("Failed to save attachment: {}", att.filename, e);
+                            logger.error("Failed to save attachment: {} (decoded: {})",
+                                    att.filename,
+                                    ImapParser.decodeFilename(att.filename),
+                                    e);
                         }
                     }
                     emails.add(email);
@@ -433,6 +466,43 @@ public class ImapClient {
         }
 
         return emails;
+    }
+
+    /**
+     * Sanitize filename để tránh lỗi trên Windows
+     * - Loại bỏ ký tự không hợp lệ: < > : " / \ | ? *
+     * - Giới hạn độ dài tên file
+     */
+    private String sanitizeFilename(String filename) {
+        if (filename == null || filename.isEmpty()) {
+            return "attachment";
+        }
+
+        // Loại bỏ ký tự không hợp lệ trên Windows
+        String safe = filename.replaceAll("[<>:\"/\\\\|?*]", "_");
+
+        // Loại bỏ khoảng trắng đầu/cuối
+        safe = safe.trim();
+
+        // Giới hạn độ dài (Windows max 255 chars, để 100 cho an toàn)
+        if (safe.length() > 100) {
+            // Giữ extension
+            int dotIndex = safe.lastIndexOf('.');
+            if (dotIndex > 0) {
+                String name = safe.substring(0, dotIndex);
+                String ext = safe.substring(dotIndex);
+                safe = name.substring(0, Math.min(name.length(), 95)) + ext;
+            } else {
+                safe = safe.substring(0, 100);
+            }
+        }
+
+        // Nếu rỗng sau khi sanitize, dùng tên mặc định
+        if (safe.isEmpty()) {
+            return "attachment";
+        }
+
+        return safe;
     }
 
     /**

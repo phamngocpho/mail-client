@@ -4,6 +4,7 @@ target/
 !**/src/test/**/target/
 .kotlin
 local.properties
+attachments/
 
 ### IntelliJ IDEA ###
 .idea/

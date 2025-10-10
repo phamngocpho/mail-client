@@ -116,7 +116,7 @@ public class SmtpService {
                 sender.quit();
             }
         } catch (SmtpException e) {
-            e.printStackTrace();
+            logger.error(e.getMessage(), e);
         } finally {
             sender.close();
             isConnected = false;
