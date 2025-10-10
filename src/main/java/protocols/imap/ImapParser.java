@@ -332,65 +332,91 @@ public class ImapParser {
     private static List<Attachment> parseAttachments(String response, String boundary) {
         List<Attachment> attachments = new ArrayList<>();
 
-        logger.info("=== PARSING ATTACHMENTS ===");
-        logger.info("Boundary: {}", boundary);
-        logger.info("Response length: {}", response.length());
-
-        if (boundary == null) {
-            logger.info("No boundary found - checking for single attachment");
-            // Có thể là email chỉ có 1 attachment không dùng multipart
-            return attachments;
-        }
+        if (boundary == null) return attachments;
 
         String[] parts = response.split(Pattern.quote(boundary), -1);
-        logger.info("Total parts split by boundary: {}", parts.length);
 
         for (int i = 1; i < parts.length - 1; i++) {
             String part = parts[i].trim();
 
-            // Log first 500 chars of each part
-            logger.debug("Part {} preview: {}", i, part.substring(0, Math.min(500, part.length())));
+            if (part.toLowerCase().contains("content-disposition:")
+                    && part.toLowerCase().contains("attachment")) {
 
-            boolean hasDisposition = part.toLowerCase().contains("content-disposition:");
-            boolean hasAttachment = part.toLowerCase().contains("attachment");
-            logger.info("Part {}: hasDisposition={}, hasAttachment={}", i, hasDisposition, hasAttachment);
-
-            if (hasDisposition && hasAttachment) {
                 // Extract filename
-                Pattern filenamePattern = Pattern.compile("filename=\"?([^\"\\r\\n]+)\"?", Pattern.CASE_INSENSITIVE);
+                Pattern filenamePattern = Pattern.compile(
+                        "filename=\"?([^\"\\r\\n]+)\"?",
+                        Pattern.CASE_INSENSITIVE
+                );
                 Matcher matcher = filenamePattern.matcher(part);
                 String filename = matcher.find() ? matcher.group(1) : "unknown";
 
-                logger.info(">>> Found attachment: {}", filename);
-
                 // Extract content type
-                Pattern typePattern = Pattern.compile("Content-Type:\\s*([^;\\r\\n]+)", Pattern.CASE_INSENSITIVE);
+                Pattern typePattern = Pattern.compile(
+                        "Content-Type:\\s*([^;\\r\\n]+)",
+                        Pattern.CASE_INSENSITIVE
+                );
                 Matcher typeMatcher = typePattern.matcher(part);
-                String contentType = typeMatcher.find() ? typeMatcher.group(1).trim() : "application/octet-stream";
-
-                logger.info("    Content-Type: {}", contentType);
+                String contentType = typeMatcher.find()
+                        ? typeMatcher.group(1).trim()
+                        : "application/octet-stream";
 
                 // Extract encoding
                 String encoding = detectEncodingForPart(response, part);
-                logger.info("    Encoding: {}", encoding);
 
                 // Extract data
                 int headerEnd = part.indexOf("\r\n\r\n");
                 if (headerEnd != -1) {
-                    String content = part.substring(headerEnd + 4).trim();
-                    logger.info("    Content length: {}", content.length());
+                    String content = part.substring(headerEnd + 4);
+
+                    // Loại bỏ boundary cuối nếu có
+                    int nextBoundary = content.indexOf("--" + boundary.substring(2));
+                    if (nextBoundary > 0) {
+                        content = content.substring(0, nextBoundary).trim();
+                    }
+
+                    logger.info("=== Processing Attachment ===");
+                    logger.info("Attachment: {}", filename);
+                    logger.info("Content-Type: {}", contentType);
+                    logger.info("Encoding: {}", encoding);
+                    logger.info("Raw content length: {}", content.length());
 
                     byte[] data = decodeAttachmentData(content, encoding);
-                    logger.info("    Decoded data length: {} bytes", data.length);
+
+                    logger.info("Decoded data length: {}", data.length);
+                    logger.info("First 50 bytes: {}",
+                            Arrays.toString(Arrays.copyOf(data, Math.min(50, data.length))));
+
+                    // Validate file signature
+                    if (data.length >= 4) {
+                        int b1 = data[0] & 0xFF;
+                        int b2 = data[1] & 0xFF;
+                        int b3 = data[2] & 0xFF;
+                        int b4 = data[3] & 0xFF;
+                        logger.info("File signature: [0x{}, 0x{}, 0x{}, 0x{}]",
+                                Integer.toHexString(b1),
+                                Integer.toHexString(b2),
+                                Integer.toHexString(b3),
+                                Integer.toHexString(b4));
+
+                        // Check file type
+                        if (b1 == 0x50 && b2 == 0x4B && b3 == 0x03 && b4 == 0x04) {
+                            logger.info("✓ Valid ZIP/Office file (.docx/.xlsx/.pptx)");
+                        } else if (b1 == 0x25 && b2 == 0x50 && b3 == 0x44 && b4 == 0x46) {
+                            logger.info("✓ Valid PDF file");
+                        } else if (b1 == 0xFF && b2 == 0xD8 && b3 == 0xFF) {
+                            logger.info("✓ Valid JPEG file");
+                        } else if (b1 == 0x89 && b2 == 0x50 && b3 == 0x4E && b4 == 0x47) {
+                            logger.info("✓ Valid PNG file");
+                        } else {
+                            logger.warn("Unknown or corrupt file signature!");
+                        }
+                    }
 
                     attachments.add(new Attachment(filename, contentType, data));
-                } else {
-                    logger.warn("    Cannot find header end for attachment");
                 }
             }
         }
 
-        logger.info("=== TOTAL ATTACHMENTS FOUND: {} ===", attachments.size());
         return attachments;
     }
 
@@ -398,16 +424,44 @@ public class ImapParser {
         try {
             encoding = encoding.toLowerCase().trim();
 
+            logger.debug("Decoding with encoding: {}", encoding);
+            logger.debug("Content preview (first 100 chars): {}",
+                    content.substring(0, Math.min(100, content.length())));
+
             switch (encoding) {
                 case "base64":
-                    String cleanBase64 = content.replaceAll("[\r\n]+", "").replaceAll("\\s+", "");
+                    // Clean Base64 string
+                    String cleanBase64 = content
+                            .replaceAll("[\\r\\n\\s]+", "")      // Loại bỏ whitespace
+                            .replaceAll("[^A-Za-z0-9+/=]", ""); // Chỉ giữ ký tự hợp lệ
+
+                    // Padding
                     while (cleanBase64.length() % 4 != 0) {
                         cleanBase64 += "=";
                     }
-                    if (isValidBase64(cleanBase64)) {
-                        return Base64.getDecoder().decode(cleanBase64);
+
+                    logger.debug("Cleaned Base64 length: {}", cleanBase64.length());
+
+                    try {
+                        byte[] decoded = Base64.getDecoder().decode(cleanBase64);
+                        logger.debug("Successfully decoded {} bytes from Base64", decoded.length);
+
+                        // Verify signature
+                        if (decoded.length >= 4) {
+                            int b1 = decoded[0] & 0xFF;
+                            int b2 = decoded[1] & 0xFF;
+                            int b3 = decoded[2] & 0xFF;
+                            int b4 = decoded[3] & 0xFF;
+                            logger.debug("Decoded signature: [0x{}, 0x{}, 0x{}, 0x{}]",
+                                    Integer.toHexString(b1), Integer.toHexString(b2),
+                                    Integer.toHexString(b3), Integer.toHexString(b4));
+                        }
+
+                        return decoded;
+                    } catch (IllegalArgumentException e) {
+                        logger.error("Invalid Base64 data: {}", e.getMessage());
+                        return new byte[0];
                     }
-                    break;
 
                 case "quoted-printable":
                     return decodeQuotedPrintable(content).getBytes(StandardCharsets.UTF_8);
@@ -415,7 +469,14 @@ public class ImapParser {
                 case "7bit":
                 case "8bit":
                 case "binary":
-                    // Binary data - KHÔNG decode, trả về raw bytes
+                    // Nếu data trông giống Base64, decode
+                    if (content.matches("^[A-Za-z0-9+/=\\s]+$") && content.startsWith("UEs")) {
+                        logger.warn("8bit/7bit data looks like Base64, attempting decode...");
+                        return decodeAttachmentData(content, "base64");
+                    }
+
+                    // Binary data - giữ nguyên
+                    logger.debug("Treating as binary data");
                     return content.getBytes(StandardCharsets.ISO_8859_1);
 
                 default:
@@ -423,11 +484,9 @@ public class ImapParser {
                     return content.getBytes(StandardCharsets.ISO_8859_1);
             }
         } catch (Exception e) {
-            logger.error("Decode attachment error: {}", e.getMessage());
+            logger.error("Decode attachment error: {}", e.getMessage(), e);
+            return new byte[0];
         }
-
-        // Fallback
-        return content.getBytes(StandardCharsets.ISO_8859_1);
     }
 
     /**
@@ -479,19 +538,62 @@ public class ImapParser {
     /**
      * Detect encoding cho part cụ thể (tìm trong full response gần part)
      */
-    private static String detectEncodingForPart(String response, String rawBody) {
-        int startPos = response.indexOf(rawBody);
-        if (startPos == -1) startPos = 0;
-
-        int contextStart = Math.max(0, startPos - 200);
-        int contextEnd = Math.min(response.length(), startPos + 200);
-        String context = response.substring(contextStart, contextEnd);
-
-        Pattern encPattern = Pattern.compile("Content-Transfer-Encoding:\\s*([a-zA-Z0-9-]+)", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = encPattern.matcher(context);
+    private static String detectEncodingForPart(String response, String part) {
+        // Tìm trong part
+        Pattern pattern = Pattern.compile(
+                "Content-Transfer-Encoding:\\s*([^\\r\\n]+)",
+                Pattern.CASE_INSENSITIVE
+        );
+        Matcher matcher = pattern.matcher(part);
         if (matcher.find()) {
-            return matcher.group(1).trim();
+            String encoding = matcher.group(1).trim();
+            logger.debug("Found encoding in part: {}", encoding);
+            return encoding;
         }
+
+        // Tìm trong toàn bộ response
+        matcher = pattern.matcher(response);
+        if (matcher.find()) {
+            String encoding = matcher.group(1).trim();
+            logger.debug("Found encoding in response: {}", encoding);
+            return encoding;
+        }
+
+        // Nếu không tìm thấy encoding, kiểm tra xem có phải Base64 không
+        int headerEnd = part.indexOf("\r\n\r\n");
+        if (headerEnd != -1) {
+            String content = part.substring(headerEnd + 4).trim();
+
+            // Lấy 100 ký tự đầu để test
+            String sample = content.substring(0, Math.min(100, content.length()));
+
+            // Base64 chỉ chứa: A-Z, a-z, 0-9, +, /, =
+            boolean looksLikeBase64 = sample.matches("^[A-Za-z0-9+/=\\s]+$");
+
+            // Kiểm tra signature của Base64-encoded ZIP
+            if (looksLikeBase64 && sample.startsWith("UEs")) {
+                logger.info("Auto-detected Base64 encoding (ZIP signature found)");
+                return "base64";
+            }
+
+            // Kiểm tra tỷ lệ ký tự Base64
+            long base64Chars = sample.chars()
+                    .filter(c -> (c >= 'A' && c <= 'Z') ||
+                            (c >= 'a' && c <= 'z') ||
+                            (c >= '0' && c <= '9') ||
+                            c == '+' || c == '/' || c == '=')
+                    .count();
+
+            double base64Ratio = (double) base64Chars / sample.replaceAll("\\s", "").length();
+
+            if (base64Ratio > 0.95) {
+                logger.info("Auto-detected Base64 encoding ({}% Base64 chars)",
+                        (int)(base64Ratio * 100));
+                return "base64";
+            }
+        }
+
+        logger.warn("No encoding found, defaulting to 7bit");
         return "7bit";
     }
 
@@ -518,7 +620,6 @@ public class ImapParser {
         return sb.toString();
     }
 
-    // Giữ nguyên các helper khác: isValidBase64, isUtf8Valid, htmlToPlainText, decodeHtmlEntities
     private static boolean isValidBase64(String str) {
         if (str == null || str.isEmpty()) return false;
         // Regex strict hơn

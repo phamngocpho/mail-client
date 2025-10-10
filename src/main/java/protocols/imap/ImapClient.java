@@ -351,6 +351,19 @@ public class ImapClient {
             while ((line = reader.readLine()) != null) {
                 response.append(line).append("\r\n");
                 lineCount++;
+
+                // Check nếu có literal data (binary attachment)
+                if (line.contains("{") && line.endsWith("}")) {
+                    int size = extractLiteralSize(line);
+                    if (size > 0) {
+                        // Đọc binary data
+                        char[] buffer = new char[size];
+                        reader.read(buffer, 0, size);
+                        response.append(buffer);
+                        response.append("\r\n");
+                    }
+                }
+
                 if (line.startsWith(tag + " ")) {
                     logger.debug("← {} ({} lines)", line, lineCount);
                     break;
@@ -362,8 +375,22 @@ public class ImapClient {
         return response.toString();
     }
 
+    // Helper method để extract size từ literal
+    private int extractLiteralSize(String line) {
+        try {
+            int start = line.lastIndexOf("{");
+            int end = line.lastIndexOf("}");
+            if (start >= 0 && end > start) {
+                return Integer.parseInt(line.substring(start + 1, end));
+            }
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+        }
+        return 0;
+    }
+
     private String quote(String text) {
-        // Thêm quotes nếu cần (có space hoặc special chars)
+        // Thêm quotes (có space hoặc special chars)
         if (text.contains(" ") || text.contains("\"")) {
             return "\"" + text.replace("\"", "\\\"") + "\"";
         }
