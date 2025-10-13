@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+import static utils.UIUtils.getFileIcon;
+
 public class Inbox extends JPanel {
     private JTable emailTable;
     private DefaultTableModel tableModel;
@@ -390,9 +392,66 @@ public class Inbox extends JPanel {
         if (selectedRow >= 0 && selectedRow < emails.size()) {
             Email selectedEmail = emails.get(selectedRow);
             if (selectedEmail.getMessageNumber() == email.getMessageNumber()) {
+                // Update body text
                 bodyTextArea.setText(email.getBody() != null ? email.getBody() : "(No content)");
                 bodyTextArea.setCaretPosition(0);
+
+                // CẬP NHẬT ATTACHMENTS PANEL
+                attachmentsPanel.removeAll();
+                if (!email.getAttachments().isEmpty()) {
+                    attachmentsPanel.setVisible(true);
+
+                    JLabel attachLabel = new JLabel("Attachments (" + email.getAttachments().size() + "):");
+                    attachLabel.putClientProperty(FlatClientProperties.STYLE, "font:bold");
+                    attachmentsPanel.add(attachLabel, "wrap");
+
+                    for (File file : email.getAttachments()) {
+                        JPanel filePanel = new JPanel(new MigLayout("insets 5", "[]10[]", "[]"));
+                        filePanel.putClientProperty(FlatClientProperties.STYLE,
+                                "arc:10;" +
+                                        "background:lighten(@background,5%)");
+
+                        // Icon based on file type
+                        JLabel iconLabel = new JLabel(getFileIcon(file));
+                        filePanel.add(iconLabel);
+
+                        // File name button
+                        JButton fileBtn = new JButton(file.getName());
+                        fileBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE,
+                                FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+                        fileBtn.setToolTipText("Click to open: " + file.getName());
+                        fileBtn.addActionListener(e -> openAttachment(file));
+                        filePanel.add(fileBtn);
+
+                        // File size
+                        String fileSize = formatFileSize(file.length());
+                        JLabel sizeLabel = new JLabel(fileSize);
+                        sizeLabel.setForeground(Color.GRAY);
+                        filePanel.add(sizeLabel);
+
+                        attachmentsPanel.add(filePanel, "growx, wrap");
+                    }
+                } else {
+                    attachmentsPanel.setVisible(false);
+                }
+
+                // Force UI update
+                attachmentsPanel.revalidate();
+                attachmentsPanel.repaint();
             }
+        }
+    }
+
+    /**
+     * Format file size (bytes -> KB/MB)
+     */
+    private String formatFileSize(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        } else if (bytes < 1024 * 1024) {
+            return String.format("%.1f KB", bytes / 1024.0);
+        } else {
+            return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
         }
     }
 

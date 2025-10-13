@@ -21,7 +21,6 @@ public class MainPanel extends JPanel {
         menu = new MainMenu();
 
         contentArea = new JPanel(new MigLayout("fill, insets 0"));
-//        contentArea.setBorder(new LineBorder(Value.deep_blue, 1));
 
         menu.setMenuItemClickListener(this::setContent);
 
