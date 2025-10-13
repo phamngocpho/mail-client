@@ -45,5 +45,5 @@ public class Constants {
     public static final String SMTP_CLOSING = "221";
 
     // Number of emails to fetch per request
-    public static final int EMAIL_FETCH_SIZE = 30;
+    public static final int EMAIL_FETCH_SIZE = 11;
 }

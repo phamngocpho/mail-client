@@ -17,6 +17,8 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
+import static utils.UIUtils.getFileIcon;
+
 public class Compose extends JPanel {
     private JTextField toField;
     private JTextField subjectField;
@@ -393,39 +395,6 @@ public class Compose extends JPanel {
             revalidate();
             repaint();
         }
-    }
-
-    private Icon getFileIcon(File file) {
-        String fileName = file.getName().toLowerCase();
-        String iconPath = "icons/compose/files/";
-
-        if (fileName.endsWith(".txt")) {
-            iconPath += "txt.svg";
-        } else if (fileName.endsWith(".pdf")) {
-            iconPath += "pdf.svg";
-        } else if (fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
-            iconPath += "word.svg";
-        } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg") ||
-                fileName.endsWith(".png") || fileName.endsWith(".gif") ||
-                fileName.endsWith(".bmp") || fileName.endsWith(".svg")) {
-            iconPath += "image.svg";
-        } else if (fileName.endsWith(".mp3") || fileName.endsWith(".wav") ||
-                fileName.endsWith(".flac") || fileName.endsWith(".aac") ||
-                fileName.endsWith(".m4a") || fileName.endsWith(".ogg")) {
-            iconPath += "audio.svg";
-        } else if (fileName.endsWith(".mp4") || fileName.endsWith(".avi") ||
-                fileName.endsWith(".mkv") || fileName.endsWith(".mov") ||
-                fileName.endsWith(".wmv") || fileName.endsWith(".flv")) {
-            iconPath += "video.svg";
-        } else if (fileName.endsWith(".exe") || fileName.endsWith(".msi")) {
-            iconPath += "exe.svg";
-        } else if (fileName.endsWith(".bat") || fileName.endsWith(".cmd")) {
-            iconPath += "bat.svg";
-        } else {
-            iconPath += "unknown.svg";
-        }
-
-        return new FlatSVGIcon(iconPath, iconSize, iconSize);
     }
 
     private void addAttachmentToPanel(File file) {

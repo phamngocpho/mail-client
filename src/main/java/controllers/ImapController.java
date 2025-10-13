@@ -249,19 +249,45 @@ public class ImapController {
 
                     logger.info("Email body loaded. Attachments count: {}", emailBody.attachments.size());
 
+                    // Tạo thư mục attachments trong project nếu chưa tồn tại
+                    File attachmentDir = new File("attachments");
+                    if (!attachmentDir.exists()) {
+                        attachmentDir.mkdirs();
+                    }
+
                     for (ImapParser.Attachment att : emailBody.attachments) {
-                        logger.info("Saving attachment: {} ({} bytes)", att.filename, att.data.length);
-                        File tempFile = File.createTempFile("email_", "_" + att.filename);
-                        try (FileOutputStream fos = new FileOutputStream(tempFile)) {
-                            fos.write(att.data);
+                        try {
+                            // DECODE FILENAME TRƯỚC KHI SỬ DỤNG
+                            String decodedFilename = ImapParser.decodeFilename(att.filename);
+
+                            // Sanitize filename (loại bỏ ký tự không hợp lệ)
+                            String safeFilename = sanitizeFilename(decodedFilename);
+
+                            logger.info("Original: {} → Decoded: {} → Safe: {}",
+                                    att.filename, decodedFilename, safeFilename);
+
+                            // Tạo tệp trong thư mục attachments
+                            File attachmentFile = getAttachmentFile(attachmentDir, safeFilename);
+
+                            // Ghi data vào tệp
+                            try (FileOutputStream fos = new FileOutputStream(attachmentFile)) {
+                                fos.write(att.data);
+                            }
+
+                            logger.info("Saved attachment: {} ({} bytes) to: {}",
+                                    safeFilename, att.data.length, attachmentFile.getAbsolutePath());
+
+                            email.addAttachment(attachmentFile);
+
+                        } catch (Exception e) {
+                            logger.error("Failed to save attachment: {}", att.filename, e);
                         }
-                        logger.info("Saved to: {}", tempFile.getAbsolutePath());
-                        email.addAttachment(tempFile);
                     }
 
                     logger.info("Total attachments added to email: {}", email.getAttachments().size());
 
                     inboxPanel.updateEmailBody(email);
+
                 } catch (Exception e) {
                     showError("Failed to load email body: " + e.getMessage());
                     logger.error("Error loading email body", e);
@@ -270,6 +296,61 @@ public class ImapController {
         };
 
         worker.execute();
+    }
+
+    private static File getAttachmentFile(File attachmentDir, String safeFilename) {
+        File attachmentFile = new File(attachmentDir, safeFilename);
+
+        // Đảm bảo tên tệp là duy nhất
+        int counter = 1;
+        String baseName = safeFilename;
+        int dotIndex = safeFilename.lastIndexOf('.');
+        if (dotIndex > 0) {
+            baseName = safeFilename.substring(0, dotIndex);
+            String ext = safeFilename.substring(dotIndex);
+            while (attachmentFile.exists()) {
+                attachmentFile = new File(attachmentDir, baseName + "_" + counter + ext);
+                counter++;
+            }
+        }
+        return attachmentFile;
+    }
+
+    /**
+     * Sanitize filename để tránh lỗi trên Windows
+     * - Loại bỏ ký tự không hợp lệ: < > : " / \ | ? *
+     * - Giới hạn độ dài tên file
+     */
+    private String sanitizeFilename(String filename) {
+        if (filename == null || filename.isEmpty()) {
+            return "attachment";
+        }
+
+        // Loại bỏ ký tự không hợp lệ trên Windows
+        String safe = filename.replaceAll("[<>:\"/\\\\|?*]", "_");
+
+        // Loại bỏ khoảng trắng đầu/cuối
+        safe = safe.trim();
+
+        // Giới hạn độ dài (Windows max 255 chars, để 100 cho an toàn)
+        if (safe.length() > 100) {
+            // Giữ extension
+            int dotIndex = safe.lastIndexOf('.');
+            if (dotIndex > 0) {
+                String name = safe.substring(0, dotIndex);
+                String ext = safe.substring(dotIndex);
+                safe = name.substring(0, Math.min(name.length(), 95)) + ext;
+            } else {
+                safe = safe.substring(0, 100);
+            }
+        }
+
+        // Nếu rỗng sau khi sanitize, dùng tên mặc định
+        if (safe.isEmpty()) {
+            return "attachment";
+        }
+
+        return safe;
     }
 
     /**

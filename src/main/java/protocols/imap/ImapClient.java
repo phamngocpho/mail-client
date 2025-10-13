@@ -111,7 +111,8 @@ public class ImapClient {
     }
 
     /**
-     * Fetch emails từ folder đã select
+     * Fetch emails từ folder đã select - CHỈ FETCH HEADERS
+     * Body sẽ được fetch riêng khi user click vào email
      *
      * @param start Message number bắt đầu (1-indexed)
      * @param end   Message number kết thúc
@@ -124,8 +125,9 @@ public class ImapClient {
         List<Email> emails;
         String tag = nextTag();
 
-        // Fetch headers: FROM, TO, SUBJECT, DATE, FLAGS
-        String command = String.format("%s FETCH %d:%d (FLAGS BODY[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID)] BODY.PEEK[])", tag, start, end);
+        // CHỈ FETCH HEADERS - KHÔNG FETCH BODY
+        String command = String.format("%s FETCH %d:%d (FLAGS BODY[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID)])",
+                tag, start, end);
 
         logger.debug("→ {}", command);
         sendCommand(command);
@@ -135,9 +137,9 @@ public class ImapClient {
             throw new ImapException(command, response, "Failed to fetch emails");
         }
 
-        // Parse từng email từ response
+        // Parse headers only
         emails = parseFetchResponse(response);
-        logger.debug("Fetched {} emails from folder: {}", emails.size(), selectedFolder);
+        logger.debug("Fetched {} email headers from folder: {}", emails.size(), selectedFolder);
 
         return emails;
     }
@@ -362,7 +364,7 @@ public class ImapClient {
                         char[] buffer = new char[size];
                         int bytesRead = reader.read(buffer, 0, size);
                         if (bytesRead != size) {
-                            logger.warn("Expected {} bytes but read {} bytes", size, bytesRead);
+                            logger.debug("Expected {} bytes but read {} bytes", size, bytesRead);
                         }
                         response.append(buffer);
                         response.append("\r\n");
@@ -408,7 +410,7 @@ public class ImapClient {
     }
 
     /**
-     * Parse FETCH response thành list emails
+     * Parse FETCH response thành list emails - CHỈ PARSE HEADERS
      */
     private List<Email> parseFetchResponse(String response) {
         List<Email> emails = new ArrayList<>();
@@ -419,90 +421,20 @@ public class ImapClient {
                 // Extract message number
                 int msgNum = extractMessageNumber(block);
                 if (msgNum > 0) {
+                    // CHỈ PARSE HEADERS - KHÔNG PARSE BODY
                     Email email = ImapParser.parseEmailFromFetch(block, msgNum);
-                    ImapParser.EmailBody emailBody = ImapParser.parseEmailBody(block);
-                    email.setBody(emailBody.plainText);
-                    email.setBodyHtml(emailBody.html);
-                    email.setHtml(!emailBody.html.isEmpty());
 
-                    // Save attachments
-                    for (ImapParser.Attachment att : emailBody.attachments) {
-                        try {
-                            // Decode và sanitize filename
-                            String decodedFilename = ImapParser.decodeFilename(att.filename);
-                            String safeFilename = sanitizeFilename(decodedFilename);
+                    // Set body placeholder để không bị null
+                    email.setBody("");
+                    email.setBodyHtml("");
+                    email.setHtml(false);
 
-                            logger.debug("Original filename: {}", att.filename);
-                            logger.debug("Decoded filename: {}", decodedFilename);
-                            logger.debug("Safe filename: {}", safeFilename);
-
-                            // Tạo thư mục attachments trong project
-                            File attachmentDir = new File("attachments");
-                            if (!attachmentDir.exists() && !attachmentDir.mkdirs()) {
-                                logger.error("Failed to create attachments directory: {}",
-                                        attachmentDir.getAbsolutePath());
-                                continue;
-                            }
-
-                            // Lưu file với tên gốc
-                            File attachmentFile = new File(attachmentDir, safeFilename);
-                            try (FileOutputStream fos = new FileOutputStream(attachmentFile)) {
-                                fos.write(att.data);
-                            }
-
-                            email.addAttachment(attachmentFile);
-                            logger.info("Saved attachment: {}", attachmentFile.getAbsolutePath());
-
-                        } catch (Exception e) {
-                            logger.error("Failed to save attachment: {} (decoded: {})",
-                                    att.filename,
-                                    ImapParser.decodeFilename(att.filename),
-                                    e);
-                        }
-                    }
                     emails.add(email);
                 }
             }
         }
 
         return emails;
-    }
-
-    /**
-     * Sanitize filename để tránh lỗi trên Windows
-     * - Loại bỏ ký tự không hợp lệ: < > : " / \ | ? *
-     * - Giới hạn độ dài tên file
-     */
-    private String sanitizeFilename(String filename) {
-        if (filename == null || filename.isEmpty()) {
-            return "attachment";
-        }
-
-        // Loại bỏ ký tự không hợp lệ trên Windows
-        String safe = filename.replaceAll("[<>:\"/\\\\|?*]", "_");
-
-        // Loại bỏ khoảng trắng đầu/cuối
-        safe = safe.trim();
-
-        // Giới hạn độ dài (Windows max 255 chars, để 100 cho an toàn)
-        if (safe.length() > 100) {
-            // Giữ extension
-            int dotIndex = safe.lastIndexOf('.');
-            if (dotIndex > 0) {
-                String name = safe.substring(0, dotIndex);
-                String ext = safe.substring(dotIndex);
-                safe = name.substring(0, Math.min(name.length(), 95)) + ext;
-            } else {
-                safe = safe.substring(0, 100);
-            }
-        }
-
-        // Nếu rỗng sau khi sanitize, dùng tên mặc định
-        if (safe.isEmpty()) {
-            return "attachment";
-        }
-
-        return safe;
     }
 
     /**
