@@ -173,7 +173,7 @@ public class Inbox extends JPanel {
 
         // Nếu user cancel, hiển thị thông báo
         if (!connected) {
-            subjectLabel.setText("Not Connected");
+            subjectLabel.setText("<html>Not Connected</html>");
             fromLabel.setText("");
             dateLabel.setText("");
             bodyTextArea.setText("Click 'Connect' button to connect to your email server and load emails.");
@@ -184,7 +184,7 @@ public class Inbox extends JPanel {
      * Show loading state
      */
     public void showLoading() {
-        subjectLabel.setText("Loading emails...");
+        subjectLabel.setText("<html>Loading emails...</html>");
         fromLabel.setText("");
         dateLabel.setText("");
         bodyTextArea.setText("Please wait while we fetch your emails from the server.");
@@ -299,14 +299,14 @@ public class Inbox extends JPanel {
      * Email detail panel (right side)
      */
     private JPanel createDetailPanel() {
-        // THAY ĐỔI: BorderLayout để body có thể scroll độc lập
+        // BorderLayout để body có thể scroll độc lập
         JPanel detailPanel = new JPanel(new BorderLayout());
 
         // Panel chứa header info (top)
         JPanel headerPanel = new JPanel(new MigLayout("fillx, insets 20", "[grow]", "[]10[]10[]10"));
 
         // Subject (large)
-        subjectLabel = new JLabel("Select an email to view");
+        subjectLabel = new JLabel("<html>Select an email to view</html>");
         subjectLabel.putClientProperty(FlatClientProperties.STYLE, "font:bold +2");
         headerPanel.add(subjectLabel, "growx, wrap");
 
@@ -365,25 +365,21 @@ public class Inbox extends JPanel {
             attachmentsPanel.add(attachLabel, "wrap, gaptop 10");
 
             for (File file : attachments) {
-                JPanel filePanel = new JPanel(new MigLayout("insets 5", "[]10[]", "[]"));
+                JPanel filePanel = new JPanel(new MigLayout("insets 5", "[]10[]10[]", "[]"));
                 filePanel.putClientProperty(FlatClientProperties.STYLE,
                         "arc:10;" +
                                 "background:lighten(@background,5%)");
 
                 JLabel iconLabel = new JLabel(getFileIcon(file));
-                filePanel.add(iconLabel);
+                filePanel.add(iconLabel, "aligny center");
 
-                JButton fileBtn = new JButton(file.getName());
-                fileBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE,
-                        FlatClientProperties.BUTTON_TYPE_BORDERLESS);
-                fileBtn.setToolTipText("Click to open: " + file.getName());
-                fileBtn.addActionListener(e -> openAttachment(file));
-                filePanel.add(fileBtn);
+                JButton fileBtn = getFileBtn(file);
+                filePanel.add(fileBtn, "aligny center");
 
                 String fileSize = formatFileSize(file.length());
                 JLabel sizeLabel = new JLabel(fileSize);
                 sizeLabel.setForeground(Color.GRAY);
-                filePanel.add(sizeLabel);
+                filePanel.add(sizeLabel, "aligny center");
 
                 attachmentsPanel.add(filePanel, "growx, wrap, gaptop 5");
             }
@@ -391,6 +387,19 @@ public class Inbox extends JPanel {
 
         attachmentsPanel.revalidate();
         attachmentsPanel.repaint();
+    }
+
+    private JButton getFileBtn(File file) {
+        String fileName = file.getName();
+        String displayName = fileName.length() > 40
+                ? fileName.substring(0, 37) + "..."
+                : fileName;
+        JButton fileBtn = new JButton("<html>" + displayName + "</html>");
+        fileBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE,
+                FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        fileBtn.setToolTipText("Click to open: " + fileName);
+        fileBtn.addActionListener(e -> openAttachment(file));
+        return fileBtn;
     }
 
     /**
@@ -401,7 +410,8 @@ public class Inbox extends JPanel {
 
         Email email = emails.get(row);
 
-        subjectLabel.setText(email.getSubject() != null ? email.getSubject() : "(No Subject)");
+        String subject = email.getSubject() != null ? email.getSubject() : "(No Subject)";
+        subjectLabel.setText("<html>" + subject + "</html>");
         fromLabel.setText(email.getFrom() != null ? email.getFrom() : "Unknown");
 
         SimpleDateFormat sdf = new SimpleDateFormat("EEE, MMM dd, yyyy 'at' hh:mm a");
@@ -460,7 +470,7 @@ public class Inbox extends JPanel {
 
         // Hiển thị thông báo nếu không có email
         if (emails.isEmpty()) {
-            subjectLabel.setText("No emails found");
+            subjectLabel.setText("<html>No emails found</html>");
             fromLabel.setText("");
             dateLabel.setText("");
             bodyTextArea.setText("Your inbox is empty or no emails match the current filter.");
