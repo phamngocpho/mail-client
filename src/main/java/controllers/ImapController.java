@@ -12,6 +12,7 @@ import utils.Constants;
 import javax.swing.*;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -38,7 +39,7 @@ public class ImapController {
         imapService.connect(host, email, password);
 
         // Fetch emails from INBOX
-        List<Email> emails = imapService.fetchRecentEmails(currentFolder, Constants.EMAIL_FETCH_SIZE);
+        List<Email> emails = imapService.fetchRecentEmails(currentFolder, Constants.EMAILS_PER_PAGE);
 
         // Update UI on EDT
         updateInboxWithEmails(emails);
@@ -59,7 +60,7 @@ public class ImapController {
                 imapService.connect(host, email, password);
 
                 // Fetch emails from INBOX
-                return imapService.fetchRecentEmails(currentFolder, Constants.EMAIL_FETCH_SIZE);
+                return imapService.fetchRecentEmails(currentFolder, Constants.EMAILS_PER_PAGE);
             }
 
             @Override
@@ -77,7 +78,7 @@ public class ImapController {
     }
 
     /**
-     * Load emails from specific folder
+     * Load emails from a specific folder
      */
     public void loadFolder(String folderName, int count) {
         SwingWorker<List<Email>, Void> worker = new SwingWorker<>() {
@@ -105,7 +106,7 @@ public class ImapController {
      * Refresh current folder
      */
     public void refresh() {
-        loadFolder(currentFolder, Constants.EMAIL_FETCH_SIZE);
+        loadFolder(currentFolder, Constants.EMAILS_PER_PAGE);
     }
 
     /**
@@ -217,7 +218,7 @@ public class ImapController {
             protected void done() {
                 try {
                     get();
-                    // Refresh to remove from list
+                    // Refresh to remove from the list
                     refresh();
                     Notifications.getInstance().show(Notifications.Type.SUCCESS, "Email deleted");
                 } catch (Exception e) {
@@ -247,12 +248,15 @@ public class ImapController {
                     email.setBodyHtml(emailBody.html);
                     email.setHtml(!emailBody.html.isEmpty());
 
-                    logger.info("Email body loaded. Attachments count: {}", emailBody.attachments.size());
+                    logger.debug("Email body loaded. Attachments count: {}", emailBody.attachments.size());
 
                     // Tạo thư mục attachments trong project nếu chưa tồn tại
                     File attachmentDir = new File("attachments");
                     if (!attachmentDir.exists()) {
-                        attachmentDir.mkdirs();
+                        if (!attachmentDir.mkdirs()) {
+                            logger.warn("Failed to create directory: {}", attachmentDir.getAbsolutePath());
+                            Notifications.getInstance().show(Notifications.Type.WARNING, "Failed to create directory for attachments");
+                        }
                     }
 
                     for (ImapParser.Attachment att : emailBody.attachments) {
@@ -263,7 +267,7 @@ public class ImapController {
                             // Sanitize filename (loại bỏ ký tự không hợp lệ)
                             String safeFilename = sanitizeFilename(decodedFilename);
 
-                            logger.info("Original: {} → Decoded: {} → Safe: {}",
+                            logger.debug("Original: {} → Decoded: {} → Safe: {}",
                                     att.filename, decodedFilename, safeFilename);
 
                             // Tạo tệp trong thư mục attachments
@@ -274,7 +278,7 @@ public class ImapController {
                                 fos.write(att.data);
                             }
 
-                            logger.info("Saved attachment: {} ({} bytes) to: {}",
+                            logger.debug("Saved attachment: {} ({} bytes) to: {}",
                                     safeFilename, att.data.length, attachmentFile.getAbsolutePath());
 
                             email.addAttachment(attachmentFile);
@@ -284,7 +288,7 @@ public class ImapController {
                         }
                     }
 
-                    logger.info("Total attachments added to email: {}", email.getAttachments().size());
+                    logger.debug("Total attachments added to email: {}", email.getAttachments().size());
 
                     inboxPanel.updateEmailBody(email);
 
@@ -303,7 +307,7 @@ public class ImapController {
 
         // Đảm bảo tên tệp là duy nhất
         int counter = 1;
-        String baseName = safeFilename;
+        String baseName;
         int dotIndex = safeFilename.lastIndexOf('.');
         if (dotIndex > 0) {
             baseName = safeFilename.substring(0, dotIndex);

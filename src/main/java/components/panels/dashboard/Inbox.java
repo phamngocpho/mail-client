@@ -270,7 +270,6 @@ public class Inbox extends JPanel {
 
         JScrollPane scrollPane = new JScrollPane(emailTable);
         scrollPane.setBorder(null);
-
         return scrollPane;
     }
 
@@ -399,6 +398,7 @@ public class Inbox extends JPanel {
                 FlatClientProperties.BUTTON_TYPE_BORDERLESS);
         fileBtn.setToolTipText("Click to open: " + fileName);
         fileBtn.addActionListener(e -> openAttachment(file));
+        fileBtn.putClientProperty(FlatClientProperties.STYLE, "focusWidth: 0;");
         return fileBtn;
     }
 
@@ -428,6 +428,18 @@ public class Inbox extends JPanel {
         } else {
             bodyTextArea.setText(email.getBody());
             bodyTextArea.setCaretPosition(0);
+        }
+
+        // Tự động đánh dấu là đã đọc
+        if (!email.hasFlag("Seen")) {
+            // Đánh dấu đã đọc sau 1 giây
+            Timer timer = new Timer(1000, e -> {
+                if (controller != null && controller.isConnected()) {
+                    controller.markAsRead(email, true);
+                }
+            });
+            timer.setRepeats(false);
+            timer.start();
         }
     }
 
@@ -532,7 +544,7 @@ public class Inbox extends JPanel {
     /**
      * Custom cell renderer for email rows
      */
-    private static class EmailCellRenderer extends DefaultTableCellRenderer {
+    private class EmailCellRenderer extends DefaultTableCellRenderer {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                                                        boolean isSelected, boolean hasFocus, int row, int column) {
@@ -544,6 +556,24 @@ public class Inbox extends JPanel {
                 setHorizontalAlignment(CENTER);
             } else {
                 setHorizontalAlignment(LEFT);
+            }
+
+            // Highlight unread emails với background sáng hơn
+            if (row >= 0 && row < emails.size()) {
+                Email email = emails.get(row);
+                if (!email.hasFlag("Seen") && !isSelected) {
+                    // Unread email - background sáng hơn
+                    c.setBackground(UIManager.getColor("Table.background"));
+                    Color bg = c.getBackground();
+                    // Làm sáng thêm 5%
+                    c.setBackground(new Color(
+                            Math.min(255, bg.getRed() + 13),
+                            Math.min(255, bg.getGreen() + 13),
+                            Math.min(255, bg.getBlue() + 13)
+                    ));
+                } else if (!isSelected) {
+                    c.setBackground(table.getBackground());
+                }
             }
 
             return c;
