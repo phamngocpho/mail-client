@@ -562,7 +562,7 @@ public class ImapParser {
     }
 
     /**
-     * Normalize charset name (handle các variant khác nhau)
+     * Normalize charset name (handle các variant khác nhau)b
      */
     private static String normalizeCharset(String charset) {
         if (charset == null || charset.isEmpty()) {

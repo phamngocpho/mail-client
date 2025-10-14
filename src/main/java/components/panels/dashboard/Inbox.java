@@ -150,7 +150,7 @@ public class Inbox extends JPanel {
     }
 
     /**
-     * Refresh single email row
+     * Refresh a single email row
      */
     public void refreshEmailRow(Email email) {
         int index = emails.indexOf(email);
@@ -165,7 +165,7 @@ public class Inbox extends JPanel {
     }
 
     /**
-     * Show login dialog to connect to IMAP
+     * Show a login dialog to connect to IMAP
      */
     private void showLoginDialog() {
         Frame parentFrame = (Frame) SwingUtilities.getWindowAncestor(this);
@@ -289,7 +289,7 @@ public class Inbox extends JPanel {
         boolean isStarred = email.hasFlag("Flagged");
         tableModel.setValueAt(isStarred ? starFilledIcon : starOutlineIcon, row, 1);
 
-        // Sync with IMAP server if connected
+        // Sync with the IMAP server if connected
         if (controller != null && controller.isConnected()) {
             controller.updateEmailFlags(email);
         }
@@ -299,11 +299,16 @@ public class Inbox extends JPanel {
      * Email detail panel (right side)
      */
     private JPanel createDetailPanel() {
-        JPanel detailPanel = new JPanel(new MigLayout("fill, insets 20", "[grow]", "[]10[]10[]20[grow]"));
+        // THAY ĐỔI: BorderLayout để body có thể scroll độc lập
+        JPanel detailPanel = new JPanel(new BorderLayout());
+
+        // Panel chứa header info (top)
+        JPanel headerPanel = new JPanel(new MigLayout("fillx, insets 20", "[grow]", "[]10[]10[]10"));
 
         // Subject (large)
         subjectLabel = new JLabel("Select an email to view");
-        detailPanel.add(subjectLabel, "growx, wrap");
+        subjectLabel.putClientProperty(FlatClientProperties.STYLE, "font:bold +2");
+        headerPanel.add(subjectLabel, "growx, wrap");
 
         // From (with avatar)
         JPanel fromPanel = new JPanel(new MigLayout("insets 0", "[]10[]", "[]"));
@@ -314,28 +319,78 @@ public class Inbox extends JPanel {
         fromLabel = new JLabel("sender@example.com");
         fromPanel.add(fromLabel);
 
-        detailPanel.add(fromPanel, "growx, wrap");
+        headerPanel.add(fromPanel, "growx, wrap");
 
         // Date
         dateLabel = new JLabel("");
         dateLabel.setForeground(Color.GRAY);
-        detailPanel.add(dateLabel, "growx, wrap");
+        headerPanel.add(dateLabel, "growx, wrap");
 
+        // Attachments panel - hidemode 3 để không chiếm space khi ẩn
         attachmentsPanel = new JPanel(new MigLayout("insets 0,fillx", "[grow]", "[]"));
         attachmentsPanel.setVisible(false);
-        detailPanel.add(attachmentsPanel, "growx, wrap");
+        headerPanel.add(attachmentsPanel, "growx, wrap, hidemode 3");
 
-        // Body
+        detailPanel.add(headerPanel, BorderLayout.NORTH);
+
+        // Body - Panel riêng với scroll (center)
         bodyTextArea = new JTextArea();
         bodyTextArea.setLineWrap(true);
         bodyTextArea.setWrapStyleWord(true);
         bodyTextArea.setEditable(false);
+        bodyTextArea.setMargin(new Insets(10, 20, 10, 20));
 
         JScrollPane bodyScroll = new JScrollPane(bodyTextArea);
         bodyScroll.setBorder(null);
-        detailPanel.add(bodyScroll, "grow");
+        bodyScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        bodyScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+
+        detailPanel.add(bodyScroll, BorderLayout.CENTER);
 
         return detailPanel;
+    }
+
+    /**
+     * Populate attachments panel
+     */
+    private void populateAttachmentsPanel(List<File> attachments) {
+        attachmentsPanel.removeAll();
+        attachmentsPanel.setVisible(false);
+
+        if (!attachments.isEmpty()) {
+            attachmentsPanel.setVisible(true);
+
+            JLabel attachLabel = new JLabel("Attachments (" + attachments.size() + "):");
+            attachLabel.putClientProperty(FlatClientProperties.STYLE, "font:bold");
+            attachmentsPanel.add(attachLabel, "wrap, gaptop 10");
+
+            for (File file : attachments) {
+                JPanel filePanel = new JPanel(new MigLayout("insets 5", "[]10[]", "[]"));
+                filePanel.putClientProperty(FlatClientProperties.STYLE,
+                        "arc:10;" +
+                                "background:lighten(@background,5%)");
+
+                JLabel iconLabel = new JLabel(getFileIcon(file));
+                filePanel.add(iconLabel);
+
+                JButton fileBtn = new JButton(file.getName());
+                fileBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE,
+                        FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+                fileBtn.setToolTipText("Click to open: " + file.getName());
+                fileBtn.addActionListener(e -> openAttachment(file));
+                filePanel.add(fileBtn);
+
+                String fileSize = formatFileSize(file.length());
+                JLabel sizeLabel = new JLabel(fileSize);
+                sizeLabel.setForeground(Color.GRAY);
+                filePanel.add(sizeLabel);
+
+                attachmentsPanel.add(filePanel, "growx, wrap, gaptop 5");
+            }
+        }
+
+        attachmentsPanel.revalidate();
+        attachmentsPanel.repaint();
     }
 
     /**
@@ -352,26 +407,9 @@ public class Inbox extends JPanel {
         SimpleDateFormat sdf = new SimpleDateFormat("EEE, MMM dd, yyyy 'at' hh:mm a");
         dateLabel.setText(email.getDate() != null ? sdf.format(email.getDate()) : "");
 
-        // Show attachments if any
-        attachmentsPanel.removeAll();
-        if (!email.getAttachments().isEmpty()) {
-            attachmentsPanel.setVisible(true);
-            JLabel attachLabel = new JLabel("Attachments (" + email.getAttachments().size() + "):");
-            attachmentsPanel.add(attachLabel, "wrap");
+        populateAttachmentsPanel(email.getAttachments());
 
-            for (File file : email.getAttachments()) {
-                JButton fileBtn = new JButton(file.getName());
-                fileBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
-                fileBtn.addActionListener(e -> openAttachment(file));
-                attachmentsPanel.add(fileBtn, "wrap");
-            }
-        } else {
-            attachmentsPanel.setVisible(false);
-        }
-        attachmentsPanel.revalidate();
-        attachmentsPanel.repaint();
-
-        // Nếu body chưa có, load từ server
+        // Load body
         if (email.getBody() == null || email.getBody().isEmpty()) {
             bodyTextArea.setText("Loading email content...");
             if (controller != null && controller.isConnected()) {
@@ -387,7 +425,6 @@ public class Inbox extends JPanel {
      * Update email body sau khi load xong
      */
     public void updateEmailBody(Email email) {
-        // Tìm email trong list và update UI
         int selectedRow = emailTable.getSelectedRow();
         if (selectedRow >= 0 && selectedRow < emails.size()) {
             Email selectedEmail = emails.get(selectedRow);
@@ -396,48 +433,7 @@ public class Inbox extends JPanel {
                 bodyTextArea.setText(email.getBody() != null ? email.getBody() : "(No content)");
                 bodyTextArea.setCaretPosition(0);
 
-                // CẬP NHẬT ATTACHMENTS PANEL
-                attachmentsPanel.removeAll();
-                if (!email.getAttachments().isEmpty()) {
-                    attachmentsPanel.setVisible(true);
-
-                    JLabel attachLabel = new JLabel("Attachments (" + email.getAttachments().size() + "):");
-                    attachLabel.putClientProperty(FlatClientProperties.STYLE, "font:bold");
-                    attachmentsPanel.add(attachLabel, "wrap");
-
-                    for (File file : email.getAttachments()) {
-                        JPanel filePanel = new JPanel(new MigLayout("insets 5", "[]10[]", "[]"));
-                        filePanel.putClientProperty(FlatClientProperties.STYLE,
-                                "arc:10;" +
-                                        "background:lighten(@background,5%)");
-
-                        // Icon based on file type
-                        JLabel iconLabel = new JLabel(getFileIcon(file));
-                        filePanel.add(iconLabel);
-
-                        // File name button
-                        JButton fileBtn = new JButton(file.getName());
-                        fileBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE,
-                                FlatClientProperties.BUTTON_TYPE_BORDERLESS);
-                        fileBtn.setToolTipText("Click to open: " + file.getName());
-                        fileBtn.addActionListener(e -> openAttachment(file));
-                        filePanel.add(fileBtn);
-
-                        // File size
-                        String fileSize = formatFileSize(file.length());
-                        JLabel sizeLabel = new JLabel(fileSize);
-                        sizeLabel.setForeground(Color.GRAY);
-                        filePanel.add(sizeLabel);
-
-                        attachmentsPanel.add(filePanel, "growx, wrap");
-                    }
-                } else {
-                    attachmentsPanel.setVisible(false);
-                }
-
-                // Force UI update
-                attachmentsPanel.revalidate();
-                attachmentsPanel.repaint();
+                populateAttachmentsPanel(email.getAttachments());
             }
         }
     }
