@@ -1,6 +1,7 @@
 package components.dialogs;
 
 import com.formdev.flatlaf.FlatClientProperties;
+import com.formdev.flatlaf.extras.FlatSVGIcon;
 import controllers.ImapController;
 import controllers.SmtpController;
 import net.miginfocom.swing.MigLayout;
@@ -8,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import raven.toast.Notifications;
 import utils.ConfigUtils;
+import utils.Constants;
 
 import javax.swing.*;
 import java.awt.*;
@@ -27,6 +29,7 @@ public class ImapLoginDialog extends JDialog {
     private final ImapController imapController;
     private boolean connected = false;
     private static final Logger logger = LoggerFactory.getLogger(ImapLoginDialog.class);
+    private final int iconSize = Constants.defaultIconSize - 5;
 
     public ImapLoginDialog(Frame parent, ImapController controller) {
         super(parent, "Connect to Email Server", true);
@@ -38,7 +41,7 @@ public class ImapLoginDialog extends JDialog {
     }
 
     private void initComponents() {
-        setLayout(new MigLayout("fill, insets 20", "[right][grow]", "[]10[]10[]10[]20[]"));
+        setLayout(new MigLayout("fill, insets 20", "[right][grow]", "[]10[]10[]10[]10[]"));
 
         // Title
         JLabel titleLabel = new JLabel("Email Server Configuration");
@@ -46,14 +49,15 @@ public class ImapLoginDialog extends JDialog {
 
         // Provider selection
         add(new JLabel("Provider:"), "");
-        String[] providers = {"Gmail", "Yahoo", "Outlook", "Custom"};
-        providerCombo = new JComboBox<>(providers);
-        providerCombo.addActionListener(e -> updateHostField());
-        add(providerCombo, "growx, wrap");
+        JButton providerButton = getProviderButton();
+        providerButton.setMargin(new Insets(2, 10, 2, 10));
+        add(providerButton, "growx, wrap");
 
         // Host
         add(new JLabel("IMAP Host:"), "");
         hostField = new JTextField("imap.gmail.com");
+        hostField.putClientProperty(FlatClientProperties.STYLE, "arc: 50; focusColor: null;");
+        hostField.putClientProperty(FlatClientProperties.TEXT_FIELD_PADDING, new Insets(0, 4, 0, 4));
         add(hostField, "growx, wrap");
 
         // Email
@@ -61,12 +65,16 @@ public class ImapLoginDialog extends JDialog {
         emailField = new JTextField();
         emailField.setText(ConfigUtils.getEmail());
         emailField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "your.email@example.com");
+        emailField.putClientProperty(FlatClientProperties.STYLE, "arc: 50; focusColor: null;");
+        emailField.putClientProperty(FlatClientProperties.TEXT_FIELD_PADDING, new Insets(0, 4, 0, 4));
         add(emailField, "growx, wrap");
 
         // Password
         add(new JLabel("Password:"), "");
         passwordField = new JPasswordField();
         passwordField.setText(ConfigUtils.getAppPassword());
+        passwordField.putClientProperty(FlatClientProperties.STYLE, "arc: 50; focusColor: null;");
+        passwordField.putClientProperty(FlatClientProperties.TEXT_FIELD_PADDING, new Insets(0, 4, 0, 4));
         passwordField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "App Password for Gmail");
         add(passwordField, "growx, wrap");
 
@@ -94,13 +102,48 @@ public class ImapLoginDialog extends JDialog {
 
         add(buttonPanel, "span, growx");
 
-        // Enter key to connect
+        // Enter a key to connect
         getRootPane().setDefaultButton(connectButton);
     }
 
-    private void updateHostField() {
-        String provider = (String) providerCombo.getSelectedItem();
-        switch (Objects.requireNonNull(provider)) {
+    private JButton getProviderButton() {
+        JButton providerButton = new JButton("Gmail");
+        providerButton.setIcon(new FlatSVGIcon("icons/dialog/gmail.svg", iconSize - 2, iconSize - 2));
+        providerButton.setHorizontalAlignment(SwingConstants.LEFT);
+        providerButton.putClientProperty(FlatClientProperties.STYLE,
+                "arc: 50; focusColor: null; background: #3e3e3e");
+
+        JPopupMenu providerPopup = getProviderPopup(providerButton);
+
+        providerButton.addActionListener(e -> {
+            providerPopup.setPreferredSize(new Dimension(
+                    providerButton.getWidth(),
+                    providerPopup.getPreferredSize().height));
+            providerPopup.show(providerButton, 0, providerButton.getHeight());
+        });
+
+        return providerButton;
+    }
+
+    private JPopupMenu getProviderPopup(JButton providerButton) {
+        JPopupMenu providerPopup = new JPopupMenu();
+
+        String[] providers = {"Gmail", "Yahoo", "Outlook", "Custom"};
+        for (String provider : providers) {
+            JMenuItem item = new JMenuItem(provider);
+            item.setIcon(new FlatSVGIcon("icons/dialog/" + provider.toLowerCase() + ".svg", iconSize, iconSize));
+            item.addActionListener(e -> {
+                providerButton.setText(provider);
+                providerButton.setIcon(new FlatSVGIcon("icons/dialog/" + provider.toLowerCase() + ".svg", iconSize - 2, iconSize - 2));
+                updateHostFieldForProvider(provider);
+            });
+            providerPopup.add(item);
+        }
+        return providerPopup;
+    }
+
+    private void updateHostFieldForProvider(String provider) {
+        switch (provider) {
             case "Gmail":
                 hostField.setText("imap.gmail.com");
                 passwordField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT,
@@ -140,7 +183,7 @@ public class ImapLoginDialog extends JDialog {
         connectButton.setEnabled(false);
         connectButton.setText("Connecting...");
 
-        // Connect in background thread
+        // Connect in the background thread
         SwingWorker<Void, Void> worker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() throws Exception {
@@ -179,7 +222,7 @@ public class ImapLoginDialog extends JDialog {
     }
 
     /**
-     * Show dialog and return connection status
+     * Show a dialog and return connection status
      */
     public static boolean showDialog(Frame parent, ImapController controller) {
         ImapLoginDialog dialog = new ImapLoginDialog(parent, controller);
