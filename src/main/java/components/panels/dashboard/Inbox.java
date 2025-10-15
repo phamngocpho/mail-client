@@ -7,7 +7,7 @@ import controllers.ImapController;
 import net.miginfocom.swing.MigLayout;
 import models.Email;
 import raven.toast.Notifications;
-import values.Value;
+import utils.Constants;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -36,7 +36,7 @@ public class Inbox extends JPanel {
     private FlatSVGIcon starFilledIcon;
     private FlatSVGIcon starOutlineIcon;
     private FlatSVGIcon selectOutlineIcon;
-    private final int iconSize = Value.defaultIconSize - 5;
+    private final int iconSize = Constants.defaultIconSize - 5;
 
     // Controller
     private final ImapController controller;
@@ -74,7 +74,7 @@ public class Inbox extends JPanel {
 
         // Right: Email detail
         splitPane.setRightComponent(createDetailPanel());
-        splitPane.setDividerLocation((int) (Value.dimension.getWidth() * 0.57));
+        splitPane.setDividerLocation((int) (Constants.dimension.getWidth() * 0.57));
         splitPane.putClientProperty(FlatClientProperties.STYLE,
                 "gripDotCount: 0;"
                         + "dividerSize: 5");

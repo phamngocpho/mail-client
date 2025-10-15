@@ -4,7 +4,7 @@ import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 import components.panels.dashboard.*;
 import net.miginfocom.swing.MigLayout;
-import values.Value;
+import utils.Constants;
 
 import javax.swing.*;
 import java.awt.*;
@@ -40,7 +40,7 @@ public class MainMenu extends JPanel {
     }
 
     private void init() {
-        setLayout(new MigLayout("fill", "[" + Value.defaultMenuBarSize + "!]", "[][][grow]"));
+        setLayout(new MigLayout("fill", "[" + Constants.defaultMenuBarSize + "!]", "[][][grow]"));
         // Header with hamburger menu and Gmail logo
         JPanel header = createHeader();
         add(header, "wrap, growx");
@@ -74,7 +74,7 @@ public class MainMenu extends JPanel {
         JPanel header = new JPanel(new MigLayout("insets 15 15 15 15", "[][grow]", "[]"));
 
         // Hamburger menu
-        JButton menuBtn = new JButton("", new FlatSVGIcon("icons/menu/menu.svg", Value.defaultIconSize, Value.defaultIconSize));
+        JButton menuBtn = new JButton("", new FlatSVGIcon("icons/menu/menu.svg", Constants.defaultIconSize, Constants.defaultIconSize));
         menuBtn.setBorderPainted(false);
         menuBtn.setContentAreaFilled(false);
         menuBtn.setFocusPainted(false);
@@ -90,7 +90,7 @@ public class MainMenu extends JPanel {
     }
 
     private JButton createComposeButton(JPanel composeContent) {
-        JButton btn = new JButton("Compose", new FlatSVGIcon("icons/menu/compose.svg", Value.defaultIconSize, Value.defaultIconSize));
+        JButton btn = new JButton("Compose", new FlatSVGIcon("icons/menu/compose.svg", Constants.defaultIconSize, Constants.defaultIconSize));
         btn.setPreferredSize(new Dimension(150, 48));
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btn.setFocusPainted(false);
@@ -106,7 +106,7 @@ public class MainMenu extends JPanel {
 
     private MenuItem createMenuItem(String iconPath, String text, boolean selected, JPanel content) {
         MenuItem item = new MenuItem(
-                new FlatSVGIcon(iconPath, Value.defaultIconSize, Value.defaultIconSize),
+                new FlatSVGIcon(iconPath, Constants.defaultIconSize, Constants.defaultIconSize),
                 text,
                 selected,
                 content
@@ -175,7 +175,7 @@ public class MainMenu extends JPanel {
 
     public void addLabel(String name) {
         JPanel labelContent = createContentPanel(name + " Content");
-        MenuItem label = new MenuItem(new FlatSVGIcon("icons/menu/add.svg", Value.defaultIconSize, Value.defaultIconSize), name, false, labelContent);
+        MenuItem label = new MenuItem(new FlatSVGIcon("icons/menu/add.svg", Constants.defaultIconSize, Constants.defaultIconSize), name, false, labelContent);
         label.putClientProperty(FlatClientProperties.STYLE, "arc:50");
         labelsPanel.add(label, "wrap, growx");
         labelsPanel.revalidate();

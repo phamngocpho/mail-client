@@ -2,7 +2,6 @@ package utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import raven.toast.Notifications;
-import values.Value;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -20,7 +19,7 @@ public class ConfigUtils {
     }
 
     private static void loadProperties() {
-        try (InputStream input = new FileInputStream(Value.resources + "local.properties")) {
+        try (InputStream input = new FileInputStream(Constants.resources + "local.properties")) {
             properties.load(input);
             loaded = true;
             logger.info("Loaded local.properties successfully");

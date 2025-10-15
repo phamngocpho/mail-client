@@ -8,7 +8,7 @@ import jnafilechooser.api.JnaFileChooser;
 import models.Email;
 import net.miginfocom.swing.MigLayout;
 import raven.toast.Notifications;
-import values.Value;
+import utils.Constants;
 
 import javax.swing.*;
 import java.awt.*;
@@ -30,7 +30,7 @@ public class Compose extends JPanel {
     private JPanel attachmentPanel;
 
     private final List<File> attachments = new ArrayList<>();
-    private final int iconSize = Value.defaultIconSize - 3;
+    private final int iconSize = Constants.defaultIconSize - 3;
 
     private final SmtpController controller;
     private JButton fromSelector;
@@ -115,7 +115,7 @@ public class Compose extends JPanel {
 
         // Bottom toolbar
         add(createToolbarPanel(), "span,growx,h 60!");
-        setBorder(BorderFactory.createMatteBorder(0, 2, 0, 0, Value.dark_gray));
+        setBorder(BorderFactory.createMatteBorder(0, 2, 0, 0, Constants.dark_gray));
     }
 
     private JTextField createTextField(String placeholder) {
@@ -135,7 +135,7 @@ public class Compose extends JPanel {
         fromSelector.putClientProperty(FlatClientProperties.BUTTON_TYPE, "roundRect");
         fromSelector.setFocusPainted(false);
         fromSelector.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        fromSelector.setBackground(Value.dark_gray);
+        fromSelector.setBackground(Constants.dark_gray);
         fromSelector.addActionListener(e -> showEmailSelector());
         updateFromEmail();
         return fromSelector;

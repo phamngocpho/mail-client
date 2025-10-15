@@ -2,7 +2,7 @@ package components.panels;
 
 import components.menus.MainMenu;
 import net.miginfocom.swing.MigLayout;
-import values.Value;
+import utils.Constants;
 
 import javax.swing.*;
 
@@ -16,7 +16,7 @@ public class MainPanel extends JPanel {
     }
 
     private void init() {
-        setLayout(new MigLayout("fill, insets 0", "[" + Value.defaultMenuBarSize + "!][grow]", "[grow]"));
+        setLayout(new MigLayout("fill, insets 0", "[" + Constants.defaultMenuBarSize + "!][grow]", "[grow]"));
 
         menu = new MainMenu();
 

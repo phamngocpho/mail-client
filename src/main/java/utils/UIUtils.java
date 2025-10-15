@@ -9,7 +9,7 @@ import java.io.File;
  * Tiện ích hỗ trợ giao diện người dùng
  */
 public class UIUtils {
-    private static final int DEFAULT_ICON_SIZE = 16; // Có thể lấy từ Value.defaultIconSize nếu cần
+    private static final int DEFAULT_ICON_SIZE = 16; // Có thể lấy từ Constants.defaultIconSize nếu cần
 
     /**
      * Lấy biểu tượng SVG dựa trên phần mở rộng của tệp
