@@ -22,14 +22,38 @@ import java.util.List;
  * various operations on email messages.
  */
 public class ImapController {
-    private final Inbox inboxPanel;
+    private Inbox inboxPanel;
     private final ImapService imapService;
     private String currentFolder = "INBOX";
     private static final Logger logger = LoggerFactory.getLogger(ImapController.class);
+    private final List<Inbox> registeredInboxes = new ArrayList<>();
 
-    public ImapController(Inbox inboxPanel) {
+    public ImapController(Inbox inboxPanel, String folderName) {
         this.inboxPanel = inboxPanel;
         this.imapService = new ImapService();
+        this.currentFolder = folderName;
+    }
+
+    public void registerInbox(Inbox inbox) {
+        if (!registeredInboxes.contains(inbox)) {
+            registeredInboxes.add(inbox);
+        }
+    }
+
+    public void unregisterInbox(Inbox inbox) {
+        registeredInboxes.remove(inbox);
+    }
+
+    private void notifyAllInboxes(List<Email> emails, String folder) {
+        for (Inbox inbox : registeredInboxes) {
+            if (inbox.getFolderName().equals(folder)) {
+                SwingUtilities.invokeLater(() -> inbox.loadEmails(emails));
+            }
+        }
+    }
+
+    public void setCurrentFolder(String folderName) {
+        this.currentFolder = folderName;
     }
 
     /**
@@ -44,7 +68,7 @@ public class ImapController {
         List<Email> emails = imapService.fetchRecentEmails(currentFolder, Constants.EMAILS_PER_PAGE);
 
         // Update UI on EDT
-        updateInboxWithEmails(emails);
+        notifyAllInboxes(emails, currentFolder);
     }
 
     /**
@@ -53,7 +77,9 @@ public class ImapController {
      */
     public void connect(String host, String email, String password) {
         // Show loading state
-        SwingUtilities.invokeLater(inboxPanel::showLoading);
+        if (inboxPanel != null) {
+            SwingUtilities.invokeLater(inboxPanel::showLoading);
+        }
 
         SwingWorker<List<Email>, Void> worker = new SwingWorker<>() {
             @Override
@@ -69,7 +95,7 @@ public class ImapController {
             protected void done() {
                 try {
                     List<Email> emails = get();
-                    updateInboxWithEmails(emails);
+                    notifyAllInboxes(emails, currentFolder);
                 } catch (Exception e) {
                     showError("Failed to connect: " + e.getMessage());
                 }
@@ -94,7 +120,7 @@ public class ImapController {
             protected void done() {
                 try {
                     List<Email> emails = get();
-                    inboxPanel.loadEmails(emails);
+                    notifyAllInboxes(emails, folderName);
                 } catch (Exception e) {
                     showError("Failed to load emails: " + e.getMessage());
                 }
@@ -108,7 +134,25 @@ public class ImapController {
      * Refresh current folder
      */
     public void refresh() {
-        loadFolder(currentFolder, Constants.EMAILS_PER_PAGE);
+        SwingWorker<List<Email>, Void> worker = new SwingWorker<>() {
+            @Override
+            protected List<Email> doInBackground() throws Exception {
+                return imapService.fetchRecentEmails(currentFolder, Constants.EMAILS_PER_PAGE);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    List<Email> emails = get();
+                    // Notify tất cả inbox đang xem folder này
+                    notifyAllInboxes(emails, currentFolder);
+                } catch (Exception e) {
+                    showError("Failed to refresh: " + e.getMessage());
+                }
+            }
+        };
+
+        worker.execute();
     }
 
     /**
@@ -151,6 +195,7 @@ public class ImapController {
                 try {
                     get();
                     logger.info("Flags synced with server");
+                    refresh();
                 } catch (Exception e) {
                     showError("Failed to update flags: " + e.getMessage());
                     logger.error("Failed to update flags: {}", e.getMessage());
@@ -292,7 +337,10 @@ public class ImapController {
 
                     logger.debug("Total attachments added to email: {}", email.getAttachments().size());
 
-                    inboxPanel.updateEmailBody(email);
+                    // Update body cho tất cả inbox đang hiển thị email này
+                    for (Inbox inbox : registeredInboxes) {
+                        SwingUtilities.invokeLater(() -> inbox.updateEmailBody(email));
+                    }
 
                 } catch (Exception e) {
                     showError("Failed to load email body: " + e.getMessage());
@@ -395,7 +443,7 @@ public class ImapController {
      */
     private void updateInboxWithEmails(List<Email> emails) {
         SwingUtilities.invokeLater(() -> {
-            inboxPanel.loadEmails(emails);
+            notifyAllInboxes(emails, currentFolder);
             logger.info("Connected successfully! Loaded {} emails", emails.size());
         });
     }

@@ -123,11 +123,11 @@ public class MainMenu extends JPanel {
     }
 
     private void addMenuItems() {
-        JPanel inboxContent = new Inbox();
-        JPanel starredContent = new Starred();
-        JPanel snoozedContent = new Snoozed();
-        JPanel sentContent = new Sent();
-        JPanel draftsContent = new Drafts();
+        JPanel inboxContent = new Inbox("INBOX", "ALL");
+        JPanel starredContent = new Inbox("INBOX", "STARRED");
+        JPanel snoozedContent = new Inbox("[Gmail]/Snoozed", "ALL");
+        JPanel sentContent = new Inbox("[Gmail]/Sent Mail", "ALL");
+        JPanel draftsContent = new Inbox("[Gmail]/Drafts", "ALL");
         JPanel moreContent = createContentPanel("More Content");
 
         MenuItem inbox = createMenuItem("icons/menu/inbox.svg", "Inbox", true, inboxContent);
