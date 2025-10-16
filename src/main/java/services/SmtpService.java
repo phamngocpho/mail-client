@@ -6,6 +6,14 @@ import org.slf4j.LoggerFactory;
 import protocols.smtp.SmtpException;
 import protocols.smtp.SmtpSender;
 
+/**
+ * The SmtpService class provides functionality for sending emails using the
+ * Simple Mail Transfer Protocol (SMTP). It supports connecting to an SMTP server,
+ * authenticating, sending emails to single or multiple recipients, handling CC
+ * recipients, and disconnecting from the server.
+ * <p>
+ * It also includes utility methods for quick email sending and connection testing.
+ */
 public class SmtpService {
     private final SmtpSender sender;
     private String currentHost;

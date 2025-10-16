@@ -24,6 +24,49 @@ import java.util.List;
 
 import static utils.UIUtils.getFileIcon;
 
+/**
+ * This class represents the Inbox panel, which is a graphical user interface (GUI)
+ * component used to display and interact with a user's email inbox.
+ * It extends from JPanel to integrate with the Swing framework.
+ * The Inbox includes an email list, email details, and controls for managing emails.
+ * <p>
+ * Fields:
+ * - emailTable: Represents the table displaying the list of emails.
+ * - tableModel: Data model for the email table.
+ * - fromLabel: Label to display the sender's information.
+ * - subjectLabel: Label to display the email subject.
+ * - dateLabel: Label to display the email date.
+ * - bodyTextArea: Text area to display the email body.
+ * - attachmentsPanel: Panel for displaying email attachments.
+ * - emails: List of emails loaded into the inbox.
+ * - starFilledIcon: Icon used to indicate a starred email.
+ * - starOutlineIcon: Icon used to indicate an unstarred email.
+ * - selectOutlineIcon: Icon used to indicate a selectable item.
+ * - iconSize: Size for icons used in the Inbox.
+ * - controller: Controller handling Inbox-related actions.
+ * <p>
+ * Methods:
+ * - Inbox(): Constructs the Inbox panel and initializes its components.
+ * - loadIcons(): Loads icons used throughout the Inbox panel.
+ * - init(): Initializes the Inbox's layout and components.
+ * - createTopToolbar(): Creates the top toolbar of the inbox.
+ * - showContextMenu(MouseEvent e): Displays a context menu for the email table upon a right-click event.
+ * - refreshEmailRow(Email email): Refreshes a specific email row in the table.
+ * - showLoginDialog(): Displays a login dialog to connect to the email server.
+ * - showLoading(): Displays a loading state in the UI when performing actions.
+ * - createEmailListPanel(): Creates the left panel that lists email summaries.
+ * - toggleStarred(int row): Toggles the starred status of a specific email.
+ * - createDetailPanel(): Creates the right panel for showing email details.
+ * - populateAttachmentsPanel(List<File> attachments): Populates the panel with email attachments.
+ * - getFileBtn(File file): Creates and returns a button for an attachment file.
+ * - showEmailDetail(int row): Displays the details of a selected email.
+ * - updateEmailBody(Email email): Updates the email body after it has been loaded.
+ * - formatFileSize(long bytes): Formats file sizes from bytes to a user-friendly string (e.g., KB, MB).
+ * - loadEmails(List<Email> emailList): Loads a list of emails into the table.
+ * - refreshTable(): Refreshes the entire email table.
+ * - extractName(String email): Extracts the name from an email address.
+ * - openAttachment(File file): Opens a given attachment file using the default application.
+ */
 public class Inbox extends JPanel {
     private JTable emailTable;
     private DefaultTableModel tableModel;
@@ -82,6 +125,18 @@ public class Inbox extends JPanel {
         add(splitPane, "grow");
     }
 
+    /**
+     * Creates and returns the top toolbar panel for the inbox interface.
+     * The toolbar includes various components such as a "Connect" button,
+     * a "Refresh" button, category tabs for email types (e.g., Primary, Social, Promotions),
+     * and a search box.
+     * <p>
+     * The "Connect" button allows users to authenticate and connect to their email server.
+     * The "Refresh" button reloads content if the user is connected.
+     * The category tabs display groups of emails, and the search box enables searching within emails.
+     *
+     * @return a JPanel instance representing the top toolbar with configured components
+     */
     private JPanel createTopToolbar() {
         JPanel toolbar = new JPanel(new MigLayout("fillx, insets 3", "[]5[]5[]push[grow]", "[]"));
 
@@ -125,6 +180,16 @@ public class Inbox extends JPanel {
         return toolbar;
     }
 
+    /**
+     * Displays a context menu for the email table upon a right-click action.
+     * <p>
+     * This method identifies the email row based on the mouse event, selects the row,
+     * and creates a context menu with actions like marking the email as read/unread
+     * and deleting the email. The menu is displayed at the location of the mouse click.
+     *
+     * @param e the MouseEvent that triggered the context menu, providing the
+     *          location of the click and other contextual information
+     */
     private void showContextMenu(MouseEvent e) {
         int row = emailTable.rowAtPoint(e.getPoint());
         if (row < 0 || row >= emails.size()) return;
@@ -388,6 +453,13 @@ public class Inbox extends JPanel {
         attachmentsPanel.repaint();
     }
 
+    /**
+     * Creates a JButton for the provided file, displaying its name (truncated if too long)
+     * and setting up an action to open the file on click.
+     *
+     * @param file the file for which the button is created
+     * @return a JButton configured to display the file name and open the file
+     */
     private JButton getFileBtn(File file) {
         String fileName = file.getName();
         String displayName = fileName.length() > 40
@@ -611,6 +683,12 @@ public class Inbox extends JPanel {
         }
     }
 
+    /**
+     * Attempts to open the given file using the default application associated with its type.
+     * If the desktop environment does not support this operation or the file cannot be opened, an error notification is displayed.
+     *
+     * @param file the file to be opened; must not be null
+     */
     private void openAttachment(File file) {
         try {
             if (Desktop.isDesktopSupported()) {

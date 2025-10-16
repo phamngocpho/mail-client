@@ -10,6 +10,11 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * The ImapParser class provides utility methods to parse and process IMAP responses.
+ * It includes functionalities to extract and decode email data, parse headers, process attachments,
+ * handle encodings, and manage multipart content within email messages.
+ */
 public class ImapParser {
     private static final Logger logger = LoggerFactory.getLogger(ImapParser.class);
 
@@ -95,7 +100,11 @@ public class ImapParser {
     }
 
     /**
-     * Parse headers thành Email object
+     * Parses the raw email header string and extracts individual header fields.
+     * The parsed header fields are then processed, and their data is added to the given Email object.
+     *
+     * @param headers The raw string containing email headers, typically separated by CRLF (\r\n).
+     * @param email The Email object to populate with parsed header information.
      */
     private static void parseHeaders(String headers, Email email) {
         String[] lines = headers.split("\r\n");
@@ -126,7 +135,11 @@ public class ImapParser {
     }
 
     /**
-     * Process từng header field
+     * Processes a specific email header and updates the corresponding field in the given Email object.
+     *
+     * @param header The name of the email header (e.g., "FROM", "TO", "SUBJECT").
+     * @param value The value associated with the header, typically as a raw string.
+     * @param email The Email objects to be updated with the processed header information.
      */
     private static void processHeader(String header, String value, Email email) {
         switch (header) {
@@ -170,7 +183,15 @@ public class ImapParser {
     }
 
     /**
-     * Decode subject (handle an encoded-word format)
+     * Decodes a subject string encoded in RFC 2047 format with UTF-8 and Base64 encoding.
+     * <p>
+     * The method identifies sections of the subject formatted as "=?UTF-8?B?...?=",
+     * decodes the Base64 payload, and builds a plaintext representation of the subject.
+     *
+     * @param subject The subject string to decode. This string may contain encoded sections
+     *                following the RFC 2047 format.
+     * @return The decoded plain text subject. If no encoded sections are found, the original
+     *         subject is returned unmodified.
      */
     private static String decodeSubject(String subject) {
         Pattern pattern = Pattern.compile("=\\?UTF-8\\?B\\?([^?]+)\\?=");
@@ -188,7 +209,15 @@ public class ImapParser {
     }
 
     /**
-     * Parse date từ RFC 2822 format
+     * Parses a date string into a Date object using multiple date formats.
+     * If the date string cannot be parsed with any of the specified formats,
+     * the current date and time are returned as a fallback.
+     *
+     * @param dateStr the date string to be parsed. This is expected to be in one of
+     *                the predefined formats, such as "EEE, dd MMM yyyy HH:mm:ss Z"
+     *                or similar.
+     * @return a Date object representing the parsed date if successful, or the
+     *         current date and time if parsing fails.
      */
     private static Date parseDate(String dateStr) {
         try {
@@ -222,6 +251,15 @@ public class ImapParser {
         return 0;
     }
 
+    /**
+     * Parses the body of an email from the given IMAP FETCH response.
+     * The method extracts raw body content, detects boundaries for
+     * multipart content, and parses attachments if applicable.
+     *
+     * @param response The IMAP FETCH response containing the email body data.
+     * @return An EmailBody object containing the plain text, HTML content,
+     *         and a list of attachments parsed from the response.
+     */
     public static EmailBody parseEmailBody(String response) {
         EmailBody emailBody = extractRawBody(response);
         String boundary = detectBoundary(response);
@@ -232,7 +270,12 @@ public class ImapParser {
     }
 
     /**
-     * Extract raw body content
+     * Extracts the raw body content from an IMAP FETCH response. This method identifies
+     * the body segment, detects multipart boundaries if present, and processes the content
+     * to separate plain text, HTML, and attachments.
+     *
+     * @param response The IMAP FETCH response containing the raw email data.
+     * @return An EmailBody object containing the parsed plain text, HTML, and attachments.
      */
     private static EmailBody extractRawBody(String response) {
         EmailBody body = new EmailBody();
@@ -284,7 +327,13 @@ public class ImapParser {
     }
 
     /**
-     * Parse multipart content (có thể nested)
+     * Parses a multipart email content using the provided boundary and updates the given EmailBody object.
+     * The method processes multipart sections, determines their content type, and decodes plain text or HTML
+     * content. It also recursively handles nested multipart sections while skipping attachments.
+     *
+     * @param content The raw multipart content of the email to be parsed.
+     * @param boundary The boundary string used to separate parts of the multipart content.
+     * @param body The EmailBody object to populate with the extracted plain text and HTML content.
      */
     private static void parseMultipart(String content, String boundary, EmailBody body) {
         String[] parts = content.split(Pattern.quote(boundary));
@@ -348,7 +397,16 @@ public class ImapParser {
     }
 
     /**
-     * Extract content từ email đơn giản (không multipart)
+     * Extracts the simplified content of an email from its raw content.
+     * This method identifies and separates the headers and body of an email,
+     * determines the character set and encoding from the headers, and decodes
+     * the email body accordingly.
+     *
+     * @param emailContent The raw string representation of an email,
+     *                     including headers and body content.
+     * @return The decoded plain text of the email body. If decoding
+     *         headers and body fails or headers cannot be identified,
+     *         the trimmed email content is returned.
      */
     private static String extractSimpleContent(String emailContent) {
         int headerEnd = emailContent.indexOf("\r\n\r\n");
@@ -371,7 +429,14 @@ public class ImapParser {
     }
 
     /**
-     * Extract encoding từ headers của một part
+     * Extracts the value of the "Content-Transfer-Encoding" field from the provided email headers.
+     * The method searches for the "Content-Transfer-Encoding" header in the given string using
+     * a case-insensitive regular expression. If found, the value is trimmed and returned.
+     * If the header is missing, a default encoding of "7bit" is returned.
+     *
+     * @param headers The raw string containing email headers, typically separated by CRLF (\r\n).
+     * @return The extracted encoding value as a String (e.g., "base64", "quoted-printable"),
+     *         or "7bit" if the header is not present.
      */
     private static String extractEncodingFromHeaders(String headers) {
         Pattern pattern = Pattern.compile(
@@ -386,7 +451,14 @@ public class ImapParser {
     }
 
     /**
-     * Extract charset từ Content-Type header
+     * Extracts the charset from the given headers string. The method searches for a charset
+     * declaration within the headers using a case-insensitive regular expression. If a charset
+     * is found, it is returned trimmed. If no charset is detected, the default value "UTF-8" is returned.
+     *
+     * @param headers The raw string containing headers, typically including the "Content-Type" field
+     *                or similar metadata where a charset might be specified.
+     * @return The extracted charset as a string (e.g., "UTF-8", "ISO-8859-1"). If no charset is found,
+     *         the default value "UTF-8" is returned.
      */
     private static String extractCharsetFromHeaders(String headers) {
         Pattern pattern = Pattern.compile(
@@ -404,7 +476,11 @@ public class ImapParser {
     }
 
     /**
-     * Parse attachments từ multipart response
+     * Parses a response string containing multipart data and extracts attachments based on the specified boundary.
+     *
+     * @param response the input string containing the multipart data
+     * @param boundary the boundary delimiter used to separate the parts of the multipart data
+     * @return a list of attachments extracted from the multipart data, or an empty list if no attachments are found
      */
     private static List<Attachment> parseAttachments(String response, String boundary) {
         List<Attachment> attachments = new ArrayList<>();
@@ -462,6 +538,13 @@ public class ImapParser {
         return attachments;
     }
 
+    /**
+     * Decodes the attachment data based on the specified encoding.
+     *
+     * @param content the content of the attachment as a string to be decoded
+     * @param encoding the encoding type of the attachment content (e.g., "base64", "quoted-printable", "7bit", "8bit", "binary")
+     * @return the decoded attachment data as a byte array; returns an empty byte array if decoding fails or an error occurs
+     */
     private static byte[] decodeAttachmentData(String content, String encoding) {
         try {
             encoding = encoding.toLowerCase().trim();
@@ -514,7 +597,15 @@ public class ImapParser {
     }
 
     /**
-     * Decode content theo encoding và charset
+     * Decodes a given content string using the specified encoding and charset.
+     * The method supports multiple encoding schemes such as Base64, quoted-printable,
+     * and other standard text encodings (7bit, 8bit, binary, etc.).
+     *
+     * @param content the content string to decode; must not be null or empty
+     * @param encoding the encoding scheme of the content, e.g., "base64", "quoted-printable", etc.
+     * @param charset the charset to convert the decoded content into, e.g., "UTF-8", "ISO-8859-1"
+     * @return the decoded content as a string in the specified charset, or the original content trimmed
+     *         if decoding fails or the content is invalid for the given encoding
      */
     private static String decodeContent(String content, String encoding, String charset) {
         if (content == null || content.isEmpty()) return "";
@@ -562,7 +653,12 @@ public class ImapParser {
     }
 
     /**
-     * Normalize charset name (handle các variant khác nhau)
+     * Normalizes the provided charset name to a standard format.
+     * If the input charset is null or empty, it defaults to "UTF-8".
+     * Common charset variants are mapped to their standard names.
+     *
+     * @param charset the name of the charset to normalize, which may be null or empty
+     * @return the normalized charset name; if the input is null or empty, returns "UTF-8"
      */
     private static String normalizeCharset(String charset) {
         if (charset == null || charset.isEmpty()) {
@@ -581,7 +677,11 @@ public class ImapParser {
     }
 
     /**
-     * Detect boundary từ Content-Type
+     * Detects and extracts the boundary value from a given response string.
+     * The boundary value is typically used in multipart data structures.
+     *
+     * @param response the input string containing the boundary definition
+     * @return the extracted boundary string prefixed with "--", or null if no boundary is found
      */
     private static String detectBoundary(String response) {
         Pattern pattern = Pattern.compile("boundary=[\"']?([^\";\\s]+)[\"']?", Pattern.CASE_INSENSITIVE);
@@ -593,7 +693,12 @@ public class ImapParser {
     }
 
     /**
-     * Detect encoding cho part cụ thể
+     * Detects the content transfer encoding for a specified part of a response. It attempts to identify
+     * the encoding through specific headers or by analyzing the content structure.
+     *
+     * @param response The full response string which may contain multiple parts and headers.
+     * @param part The specific part of the response to analyze for encoding information.
+     * @return The detected encoding as a string, such as "base64", or "7bit" if no encoding is identified.
      */
     private static String detectEncodingForPart(String response, String part) {
         Pattern pattern = Pattern.compile(
@@ -646,7 +751,12 @@ public class ImapParser {
     }
 
     /**
-     * Decode quoted-printable
+     * Decodes a given string encoded in the quoted-printable format into its original form.
+     * Quoted-printable encoding is often used to encode text in email messages and other protocols
+     * to encode special and non-ASCII characters.
+     *
+     * @param qp the input string encoded in quoted-printable format; may be null
+     * @return the decoded string; if the input is null, returns an empty string
      */
     private static String decodeQuotedPrintable(String qp) {
         if (qp == null) return "";
@@ -680,6 +790,14 @@ public class ImapParser {
         return html;
     }
 
+    /**
+     * Decodes HTML entities in the provided string and converts them into their corresponding characters.
+     * Supports decoding named HTML entities (e.g., &amp;, &lt;, &gt;, etc.) and numeric character references (e.g., &#39; or &#123;).
+     *
+     * @param text the string containing HTML entities to be decoded.
+     *             If {@code null}, an empty string is returned.
+     * @return a string with all HTML entities decoded into their corresponding characters.
+     */
     private static String decodeHtmlEntities(String text) {
         if (text == null) return "";
         text = text.replaceAll("&amp;", "&")
@@ -711,7 +829,15 @@ public class ImapParser {
     }
 
     /**
-     * Decode filename từ RFC 2047 format
+     * Decodes an encoded filename string based on MIME encoding standards.
+     * If the input is null, empty, or not properly encoded, it returns a default
+     * value or the original string.
+     *
+     * @param filename the encoded filename string to be decoded; it may be in MIME
+     *                 encoded-word format (e.g., "=?charset?encoding?encoded text?=").
+     * @return the decoded version of the filename if it was properly encoded, or
+     *         the original string if decoding fails, or it doesn't match the
+     *         encoding pattern. If the input is null or empty, it returns "attachment".
      */
     public static String decodeFilename(String filename) {
         if (filename == null || filename.isEmpty()) {

@@ -14,6 +14,27 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * The ImapClient class provides functionality for connecting to an IMAP server,
+ * managing folders, retrieving emails, and manipulating email flags. It uses
+ * the IMAP protocol to perform various operations such as fetching emails,
+ * updating flags, and working with server-side folders.
+ * <p>
+ * This class supports secure SSL connections and provides methods to handle
+ * common tasks like reading email headers, fetching email bodies, marking emails
+ * as read, and deleting emails. The commands are executed through an established
+ * IMAP connection using a tagging-based system to track responses from the server.
+ * <p>
+ * Fields:
+ * - socket: The TCP socket used to connect to the IMAP server.
+ * - reader: The input stream for reading server responses.
+ * - writer: The output stream for sending commands to the server.
+ * - tagCounter: A counter to generate unique IMAP tags for commands.
+ * - connected: Indicates whether the client is currently connected to an IMAP server.
+ * - authenticated: Indicates whether the client has successfully authenticated with the server.
+ * - selectedFolder: The current folder selected for IMAP commands.
+ * - logger: Logger used for tracing and debugging client operations.
+ */
 public class ImapClient {
     private SSLSocket socket;
     private BufferedReader reader;
@@ -247,7 +268,15 @@ public class ImapClient {
     }
 
     /**
-     * Permanently delete emails marked with \Deleted flag
+     * Permanently removes all messages marked as deleted from the currently selected folder
+     * on the IMAP server.
+     * <p>
+     * This method sends the EXPUNGE command to the server to clear deleted messages.
+     * If no folder is selected, an ImapException is thrown. An error response
+     * from the server also results in an ImapException.
+     *
+     * @throws ImapException if there is no folder selected, or if the server responds
+     *         with an error to the EXPUNGE command
      */
     public void expunge() throws ImapException {
         if (selectedFolder == null) {
@@ -346,6 +375,17 @@ public class ImapClient {
         }
     }
 
+    /**
+     * Reads a complete IMAP response, including both text and binary literal data,
+     * for a specific command tag from the server. It collects all lines of the response
+     * until the line starting with the given tag is reached.
+     *
+     * @param tag the command tag used to identify the end of the response
+     * @return the full response received from the server as a string, including all lines
+     *         and literal data
+     * @throws ImapException if an I/O error occurs while reading the response, or if the
+     *         response cannot be properly processed
+     */
     private String readFullResponse(String tag) throws ImapException {
         StringBuilder response = new StringBuilder();
         int lineCount = 0;
@@ -382,7 +422,14 @@ public class ImapClient {
         return response.toString();
     }
 
-    // Helper method để extract size từ literal
+    /**
+     * Extracts the literal size from an IMAP response line in the format "{size}\r\n".
+     * The size is expected to appear at the end of the provided line. If the line does not
+     * match the expected format or does not contain a valid size, the method returns 0.
+     *
+     * @param line the IMAP response line from which the literal size needs to be extracted
+     * @return the extracted literal size as an integer if successful; otherwise, returns 0
+     */
     private int extractLiteralSize(String line) {
         try {
             // IMAP literal format: {123}\r\n
@@ -401,6 +448,14 @@ public class ImapClient {
         return 0;
     }
 
+    /**
+     * Surrounds the given text with double quotes if it contains spaces or double-quote characters.
+     * Any existing double quotes within the text are escaped with a backslash.
+     *
+     * @param text the input string to be quoted
+     * @return the quoted string if the input contains spaces or double-quote characters,
+     *         otherwise returns the original string
+     */
     private String quote(String text) {
         // Thêm quotes (có space hoặc special chars)
         if (text.contains(" ") || text.contains("\"")) {
@@ -438,8 +493,13 @@ public class ImapClient {
     }
 
     /**
-     * Extract message number từ FETCH response
-     * Example: "* 1 FETCH ..." -> 1
+     * Extracts the message number from a server response string.
+     * The method assumes the response begins with an asterisk (*) followed by a message number.
+     * If the response does not conform to this format or the number cannot be parsed, it returns -1.
+     *
+     * @param response the server response string, which is expected to begin with
+     *                 "* <message_number>" format
+     * @return the extracted message number if successfully parsed; otherwise, returns -1
      */
     private int extractMessageNumber(String response) {
         try {

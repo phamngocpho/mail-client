@@ -11,6 +11,12 @@ import protocols.imap.ImapParser;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * The ImapService class provides functionality for managing email retrieval
+ * and operations using the IMAP protocol. It includes methods for connecting
+ * to an IMAP server, fetching emails and folders, and performing actions such
+ * as marking emails as read or deleting them.
+ */
 public class ImapService {
     private final ImapClient client;
     private String currentHost;
@@ -192,7 +198,7 @@ public class ImapService {
     }
 
     /**
-     * Move email to another folder (copy + delete)
+     * Move email to another folder (copy and delete)
      */
     public void moveEmail(String fromFolder, int messageNumber, String toFolder) throws ImapException {
         if (!isConnected) {
@@ -204,10 +210,10 @@ public class ImapService {
                 client.selectFolder(fromFolder);
             }
 
-            // Copy to target folder
+            // Copy to the target folder
             client.copyEmail(messageNumber, toFolder);
 
-            // Delete from source
+            // Delete source
             client.markAsDeleted(messageNumber);
             client.expunge();
         } catch (ImapException e) {

@@ -11,6 +11,13 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 
+/**
+ * The MainMenu class represents the main navigation menu of an application.
+ * It extends the JPanel class and provides a layout for various menu items,
+ * headers, labels, and content panels. This class includes functionality for
+ * selecting menu items, handling mouse events, and allowing the main application
+ * to listen to menu item click events.
+ */
 public class MainMenu extends JPanel {
 
     private JPanel menuItemsPanel;

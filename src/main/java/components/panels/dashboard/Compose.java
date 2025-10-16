@@ -19,6 +19,15 @@ import java.util.List;
 
 import static utils.UIUtils.getFileIcon;
 
+/**
+ * The Compose class provides a user interface for composing and sending emails.
+ * <p>
+ * This class includes various components such as fields for recipient addresses,
+ * subjects, and email bodies, as well as functionality for attaching files, managing
+ * "CC" and "BCC" fields, and interacting with email server configurations. The Compose
+ * class ensures dynamic updates to the UI and enables users to send emails efficiently
+ * while validating inputs and handling attachments.
+ */
 public class Compose extends JPanel {
     private JTextField toField;
     private JTextField subjectField;
@@ -129,6 +138,16 @@ public class Compose extends JPanel {
         return field;
     }
 
+    /**
+     * Creates and configures a JButton instance named "fromSelector".
+     * The button is styled with a round rectangle appearance,
+     * a left-aligned horizontal text position, no focus paint, and a hand cursor.
+     * It also sets a dark gray background color and attaches an action listener
+     * to display an email selector when clicked. The button's label is updated
+     * using the updateFromEmail method.
+     *
+     * @return a configured instance of JButton
+     */
     private JButton createFromSelector() {
         fromSelector = new JButton();
         fromSelector.setHorizontalTextPosition(SwingConstants.LEFT);
@@ -202,6 +221,15 @@ public class Compose extends JPanel {
         return panel;
     }
 
+    /**
+     * Toggles the visibility of the "CC" field and its associated components.
+     * <p>
+     * This method manages the visibility of components related to the "CC" field based on the
+     * current state. It updates the `ccVisible` flag and iterates through the components to find
+     * the "CC" label. Once located, it toggles the visibility of the label and the associated
+     * input field `ccField`. If the CC components are made visible, the input field requests focus.
+     * Finally, the method triggers a revalidation and repainting of the component hierarchy.
+     */
     private void toggleCc() {
         ccVisible = !ccVisible;
         Component[] components = getComponents();
@@ -221,6 +249,21 @@ public class Compose extends JPanel {
         repaint();
     }
 
+    /**
+     * Toggles the visibility of the BCC (Blind Carbon Copy) field and its corresponding label in the
+     * email composition form.
+     * <p>
+     * This method performs the following actions:
+     * - Flips the value of the `bccVisible` boolean field, determining the visibility of the BCC field.
+     * - Iterates through the components of the form to locate the label with text "BCC".
+     *   - If found, updates the label's visibility based on the state of `bccVisible`.
+     *   - If the following component is the BCC input field (`bccField`), sets its visibility
+     *     accordingly and requests focus for it if it becomes visible.
+     * - Revalidates and repaints the user interface to reflect the changes.
+     * <p>
+     * This method ensures the BCC field and its associated label are dynamically shown or hidden
+     * based on the user's interaction with the toggle action.
+     */
     private void toggleBcc() {
         bccVisible = !bccVisible;
         Component[] components = getComponents();
@@ -240,6 +283,23 @@ public class Compose extends JPanel {
         repaint();
     }
 
+    /**
+     * Sends an email based on the current composition form data.
+     * <p>
+     * This method validates the form before proceeding to send the email. If the form is invalid,
+     * no further actions are taken. Once validated, it checks whether the SMTP configuration is available;
+     * if not, an error message is displayed, prompting the user to log in first.
+     * <p>
+     * The method disables the "Send" button during the email-sending process and provides feedback
+     * to the user by updating the button text to indicate the ongoing action. It employs a `SwingWorker`
+     * to handle the email-sending process asynchronously:
+     * <p>
+     * - The `doInBackground` method sends the email using the controller's `sendEmail` method.
+     * - After completion, the `done` method updates the UI and provides user feedback,
+     *   such as success notifications or error messages.
+     * <p>
+     * Ensure the controller is properly configured before attempting to send emails to avoid errors.
+     */
     private void sendEmail() {
         if (!validateForm()) {
             return;
@@ -286,6 +346,19 @@ public class Compose extends JPanel {
         worker.execute();
     }
 
+    /**
+     * Validates the email composition form by ensuring required fields are populated
+     * and confirming user intent for certain conditions.
+     * <p>
+     * The method performs the following validations:
+     * <p>
+     * 1. Checks if the "To" field is empty. If it is, it displays an error message
+     *    and focuses on the field for correction.
+     * 2. Checks if the email body field is empty. If it is, prompts the user with
+     *    a confirmation dialog to send the email without a body.
+     *
+     * @return true if the form is valid and ready for submission; false otherwise
+     */
     private boolean validateForm() {
         String to = toField.getText().trim();
         if (to.isEmpty()) {
@@ -308,6 +381,22 @@ public class Compose extends JPanel {
         return true;
     }
 
+    /**
+     * Creates and initializes a new Email object based on the input fields and selections
+     * from the email composition form.
+     * <p>
+     * The method performs the following actions:
+     * - Sets the "From" address using the trimmed text from the `fromSelector`.
+     * - Splits and adds recipient addresses from the "To" field.
+     * - If the CC field is visible and contains input, it splits and adds recipient
+     *   addresses from the CC field.
+     * - Attaches all files from the `attachments` list to the email.
+     * - Sets the email subject from the trimmed text of the subject field.
+     * - Sets the email body from the content of the body text area.
+     *
+     * @return A fully constructed Email object with specified recipients, attachments,
+     *         subject, and body.
+     */
     private Email createEmail() {
         Email email = new Email();
         email.setFrom(fromSelector.getText().trim());
@@ -340,6 +429,22 @@ public class Compose extends JPanel {
         return email;
     }
 
+    /**
+     * Clears all fields and components in the email composition form.
+     * <p>
+     * This method resets the input fields, hides the CC and BCC fields along with
+     * their respective labels, clears any attachments from the attachment panel,
+     * and refreshes the user interface. The following actions are performed:
+     * <p>
+     * - Resets the text fields for "To", "CC", "BCC", "Subject", and "Body" to empty strings.
+     * - Iterates through all components, ensuring that "CC" and "BCC" labels, if present,
+     *   are hidden.
+     * - Hides the CC and BCC fields using `ccField.setVisible(false)` and `bccField.setVisible(false)`.
+     * - Updates the `ccVisible` and `bccVisible` flags to `false`.
+     * - Clears the `attachments` list that tracks attached files.
+     * - Removes all components from the attachment panel to reflect the cleared attachments.
+     * - Revalidates and repaints the components to ensure the UI is updated.
+     */
     private void clearForm() {
         toField.setText("");
         ccField.setText("");
@@ -366,6 +471,13 @@ public class Compose extends JPanel {
         repaint();
     }
 
+    /**
+     * Searches for and returns a JButton with the text containing "Send" within the panel's components.
+     * The method iterates through the components of the current panel and its subpanels, checking
+     * for a JButton with "Send" in its text.
+     *
+     * @return the JButton with text containing "Send" if found; otherwise, null
+     */
     private JButton findSendButton() {
         Component[] components = getComponents();
         for (Component comp : components) {
@@ -382,6 +494,19 @@ public class Compose extends JPanel {
         return null;
     }
 
+    /**
+     * Opens a file chooser dialog to allow the user to select files for attachment.
+     * <p>
+     * This method uses a JnaFileChooser to provide a file selection dialog. If the user
+     * selects files and confirms their selection, the selected files are added to the
+     * attachment's list and displayed in the attachment panel. Each attachment is visually
+     * represented, and the user can manage these attachments in the panel.
+     * <p>
+     * The attachment processing involves:
+     * - Adding selected files to the `attachments` list.
+     * - Displaying each file in the attachment panel using the `addAttachmentToPanel` method.
+     * - Refreshing the UI to ensure the attachment panel reflects the added files.
+     */
     private void chooseAttachment() {
         JnaFileChooser fileChooser = new JnaFileChooser();
         boolean result = fileChooser.showOpenDialog(SwingUtilities.getWindowAncestor(this));
@@ -397,6 +522,13 @@ public class Compose extends JPanel {
         }
     }
 
+    /**
+     * Adds a file attachment as a visual component to the attachment panel.
+     * The method creates a panel for displaying the file name and a remove button,
+     * allowing users to view and remove an attachment from the attachment panel.
+     *
+     * @param file the file to be added as an attachment panel component
+     */
     private void addAttachmentToPanel(File file) {
         JPanel fileItem = new JPanel(new MigLayout("insets 5, fillx", "[grow][]"));
         fileItem.setBackground(new Color(40, 40, 40));
@@ -421,6 +553,17 @@ public class Compose extends JPanel {
         attachmentPanel.add(fileItem, "growx, wrap");
     }
 
+    /**
+     * Updates the "From" field in the email composition panel based on the email server configuration.
+     * <p>
+     * This method ensures that the "From" field reflects the current state of the email server
+     * as managed by the controller. If the email server is configured, the username associated
+     * with the account is displayed in the "From" field. Otherwise, a placeholder text is shown
+     * prompting the user to connect to the email server.
+     * <p>
+     * This operation is executed on the Event Dispatch Thread to ensure thread safety for
+     * Swing components.
+     */
     private void updateFromEmail() {
         SwingUtilities.invokeLater(() -> {
             if (fromSelector != null) {
@@ -435,6 +578,14 @@ public class Compose extends JPanel {
         });
     }
 
+    /**
+     * Displays a notification to the user when attempting to access the email selector
+     * without the email server being configured.
+     * <p>
+     * This method checks the configuration status of the email server using the controller.
+     * If the server is not configured, a warning notification is displayed at the top center
+     * of the screen, informing the user to connect to the email server first.
+     */
     private void showEmailSelector() {
         if (!controller.isConfigured()) {
             Notifications.getInstance().show(

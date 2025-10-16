@@ -6,24 +6,36 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.security.cert.X509Certificate;
 
+/**
+ * The NetworkUtils class provides utilities for working with network operations.
+ * This includes creating SSL sockets, upgrading plain sockets to TLS,
+ * and other network-related utilities such as Base64 encoding and decoding.
+ */
 public class NetworkUtils {
+
+    /**
+     * Tạo SSLContext với trust tất cả certificates (cho testing)
+     */
+    private static SSLContext createTrustAllSSLContext() throws Exception {
+        TrustManager[] trustAllCerts = new TrustManager[]{
+                new X509TrustManager() {
+                    public X509Certificate[] getAcceptedIssuers() { return null; }
+                    public void checkClientTrusted(X509Certificate[] certs, String authType) {}
+                    public void checkServerTrusted(X509Certificate[] certs, String authType) {}
+                }
+        };
+
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+        return sslContext;
+    }
 
     /**
      * Tạo SSL Socket với trust tất cả certificates (cho testing)
      */
     public static SSLSocket createSSLSocket(String host, int port, String localIP, int localPort) throws IOException {
         try {
-            TrustManager[] trustAllCerts = new TrustManager[]{
-                    new X509TrustManager() {
-                        public X509Certificate[] getAcceptedIssuers() { return null; }
-                        public void checkClientTrusted(X509Certificate[] certs, String authType) {}
-                        public void checkServerTrusted(X509Certificate[] certs, String authType) {}
-                    }
-            };
-
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
-
+            SSLContext sslContext = createTrustAllSSLContext();
             SSLSocketFactory factory = sslContext.getSocketFactory();
 
             SSLSocket socket;
@@ -54,18 +66,9 @@ public class NetworkUtils {
      */
     public static SSLSocket upgradeToTLS(Socket plainSocket, String host) throws IOException {
         try {
-            TrustManager[] trustAllCerts = new TrustManager[]{
-                    new X509TrustManager() {
-                        public X509Certificate[] getAcceptedIssuers() { return null; }
-                        public void checkClientTrusted(X509Certificate[] certs, String authType) {}
-                        public void checkServerTrusted(X509Certificate[] certs, String authType) {}
-                    }
-            };
-
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
-
+            SSLContext sslContext = createTrustAllSSLContext();
             SSLSocketFactory factory = sslContext.getSocketFactory();
+
             SSLSocket sslSocket = (SSLSocket) factory.createSocket(
                     plainSocket, host, plainSocket.getPort(), true
             );

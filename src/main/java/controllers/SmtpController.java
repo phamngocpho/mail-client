@@ -9,6 +9,16 @@ import services.SmtpService;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 
+/**
+ * The SmtpController class is responsible for managing SMTP configurations
+ * and sending emails. It provides methods to configure SMTP settings either
+ * explicitly or based on IMAP credentials, and facilitates email-sending
+ * operations with additional functionalities such as CC and quick send.
+ * <p>
+ * The SmtpController uses an underlying SmtpService for handling actual SMTP
+ * operations. It maintains the state related to SMTP configuration and supports
+ * property change listeners for monitoring changes to its properties.
+ */
 public class SmtpController {
     private static SmtpController instance;
     private final SmtpService smtpService;
@@ -35,8 +45,13 @@ public class SmtpController {
     }
 
     /**
-     * Configure SMTP từ IMAP credentials
-     * Tự động convert IMAP host thành SMTP host
+     * Configures SMTP settings based on the provided IMAP server, username, and password.
+     * Automatically derives the SMTP host from the IMAP host and uses secure communication via TLS.
+     * Fires property change events for username and configuration status updates.
+     *
+     * @param imapHost the IMAP host to derive the SMTP host from
+     * @param username the user account for SMTP authentication
+     * @param password the password associated with the user account
      */
     public void configureFromImap(String imapHost, String username, String password) {
         String oldUsername = this.username;
@@ -86,7 +101,13 @@ public class SmtpController {
     }
 
     /**
-     * Send email
+     * Sends an email using the configured SMTP settings. If the "from" field is not set in the email object,
+     * the configured username is used as the sender's email address.
+     *
+     * @param email the {@link Email} object containing details of the email to be sent,
+     *              including recipient(s), subject, and message body.
+     * @return {@code true} if the email was sent successfully; {@code false} if the operation failed
+     *         (e.g., due to missing SMTP configuration or an exception during sending).
      */
     public boolean sendEmail(Email email) {
         if (!isConfigured) {
@@ -168,10 +189,25 @@ public class SmtpController {
         return smtpService.isConnected();
     }
 
+    /**
+     * Adds a {@link PropertyChangeListener} to the listener list.
+     * The listener will be notified whenever a property change event is fired.
+     * This method allows external objects to react to changes in the object's
+     * observable properties.
+     *
+     * @param listener the {@link PropertyChangeListener} to add; must not be null
+     */
     public void addPropertyChangeListener(PropertyChangeListener listener) {
         pcs.addPropertyChangeListener(listener);
     }
 
+    /**
+     * Removes a {@link PropertyChangeListener} from the listener list.
+     * If the specified listener is not currently registered, no action is taken.
+     * This method prevents the specified listener from receiving further property change events.
+     *
+     * @param listener the {@link PropertyChangeListener} to remove; must not be null
+     */
     public void removePropertyChangeListener(PropertyChangeListener listener) {
         pcs.removePropertyChangeListener(listener);
     }

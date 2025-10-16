@@ -2,6 +2,25 @@ package utils;
 
 import java.awt.*;
 
+/**
+ * The Constants class serves as a container for various static constant values
+ * used throughout the application. These constants include configurations
+ * for IMAP and SMTP, timeout settings, server command strings, response codes,
+ * UI-related attributes, and other utility properties.
+ * <p>
+ * This class is designed for easy access to widely-used constant values without
+ * the need for instantiation. All fields in this class are declared `public static`
+ * and are intended to be immutable.
+ * <p>
+ * Categories of Constants:
+ * 1. IMAP Configuration: Includes port numbers and command strings.
+ * 2. SMTP Configuration: Includes port numbers and command strings.
+ * 3. Timeout Settings: Defines socket and connection timeout values for network operations.
+ * 4. Server Command Strings: Contains command constants for IMAP and SMTP protocols.
+ * 5. Response Codes: Defines expected server response codes for IMAP and SMTP interactions.
+ * 6. UI-related Constants: Includes UI dimensions, colors, font configurations, and resource paths.
+ * 7. Utility Constants: Miscellaneous constants for application operations (e.g., email pagination, resource paths).
+ */
 public class Constants {
     // IMAP Configuration
     public static final int IMAP_SSL_PORT = 993;
