@@ -15,6 +15,14 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
+/**
+ * The SmtpSender class provides functionality for communicating with an SMTP server to send emails.
+ * It supports establishing secure connections using TLS, authenticating with credentials, and sending 
+ * emails with attachments as well as plain text content. This class handles protocol-level operations 
+ * including EHLO, STARTTLS, and QUIT commands.
+ * <p>
+ * Note: This class throws SmtpException for errors related to SMTP operations.
+ */
 public class SmtpSender {
     private Socket socket;
     private BufferedReader reader;
@@ -178,9 +186,17 @@ public class SmtpSender {
             throw new SmtpException("Authentication failed: " + e.getMessage(), e);
         }
     }
-
+    
     /**
-     * Send email
+     * Sends an email using the SMTP protocol. This method takes an Email object containing
+     * the email's details such as sender, recipients, subject, and body content.
+     *
+     * @param email an Email object representing the email to be sent. It should include the sender's
+     *              address, recipient(s), subject, and body. The recipients must be specified, or
+     *              the email will fail to send it.
+     * @throws SmtpException if there is any error during the email-sending process, such as lack of
+     *                       authentication, incorrect command responses, or communication issues
+     *                       with the SMTP server.
      */
     public void sendEmail(Email email) throws SmtpException {
         if (!authenticated) {
@@ -225,7 +241,7 @@ public class SmtpSender {
             // Send email content
             sendEmailContent(email);
 
-            // End with .
+            // End with.
             logger.debug("→ .");
             writer.println(".");
 
@@ -250,9 +266,15 @@ public class SmtpSender {
         Email email = new Email(from, to, subject, body);
         sendEmail(email);
     }
-
+    
     /**
-     * Send email content (headers + body)
+     * Sends the content of the provided Email object to the output stream. This method handles
+     * formatting the email headers and body according to the MIME format, including support for
+     * plain text and attachments.
+     *
+     * @param email an Email object containing the details of the email to send, including headers
+     *              (e.g., sender, recipients, subject) and content (e.g., body, attachments).
+     * @throws IOException if an I/O error occurs during writing the email content.
      */
     private void sendEmailContent(Email email) throws IOException {
         SimpleDateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z", Locale.ENGLISH);
@@ -278,11 +300,7 @@ public class SmtpSender {
             writer.println("Content-Type: text/plain; charset=UTF-8");
             writer.println("Content-Transfer-Encoding: 8bit");
             writer.println();
-            String body = email.getBody() != null ? email.getBody() : "";
-            for (String line : body.split("\r?\n")) {
-                if (line.startsWith(".")) writer.println("." + line);
-                else writer.println(line);
-            }
+            sendBodyText(email.getBody());
             writer.println();
 
             // ---- Các phần file đính kèm
@@ -306,14 +324,35 @@ public class SmtpSender {
             writer.println("Content-Type: text/plain; charset=UTF-8");
             writer.println("Content-Transfer-Encoding: 8bit");
             writer.println();
-            String body = email.getBody() != null ? email.getBody() : "";
-            for (String line : body.split("\r?\n")) {
-                if (line.startsWith(".")) writer.println("." + line);
-                else writer.println(line);
+            sendBodyText(email.getBody());
+        }
+    }
+
+    /**
+     * Sends the body text of an email, properly escaping lines that start with a dot
+     * according to SMTP protocol rules.
+     *
+     * @param body the email body text to send
+     */
+    private void sendBodyText(String body) {
+        String bodyText = body != null ? body : "";
+        for (String line : bodyText.split("\r?\n")) {
+            if (line.startsWith(".")) {
+                writer.println("." + line);
+            } else {
+                writer.println(line);
             }
         }
     }
 
+    /**
+     * Encodes the content of the given file to Base64 format and writes the encoded data
+     * to the output stream in chunks suitable for MIME-compliant encoding. This is often
+     * used for transmitting file attachments in email messages.
+     *
+     * @param file the file to be encoded and sent in Base64 format; must not be null
+     * @throws IOException if an I/O error occurs while reading the file or writing the encoded data
+     */
     private void sendFileAsBase64(File file) throws IOException {
         try (java.io.FileInputStream fis = new java.io.FileInputStream(file)) {
             byte[] buffer = new byte[57]; // 57 bytes → 76 ký tự base64 (chuẩn MIME)
@@ -372,6 +411,15 @@ public class SmtpSender {
         }
     }
 
+    /**
+     * Reads a multi-line response from the SMTP server until the end of the response is identified.
+     * A multi-line response is formatted in such a way that lines begin with a status code,
+     * and the last line of the response has a space following the status code.
+     *
+     * @return the complete multi-line response from the SMTP server as a single string,
+     *         with each line separated by a newline character.
+     * @throws SmtpException if there is an error while reading the response from the server.
+     */
     private String readMultilineResponse() throws SmtpException {
         StringBuilder response = new StringBuilder();
         try {

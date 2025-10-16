@@ -6,6 +6,16 @@ import utils.Constants;
 
 import javax.swing.*;
 
+/**
+ * The MainPanel class represents the main graphical user interface element
+ * that contains a menu bar (MainMenu) and a content area. It is designed
+ * to organize and display different panels dynamically based on user interaction
+ * with the menu.
+ * <p>
+ * This class extends JPanel and uses the MigLayout for flexible and precise layout
+ * management. It initializes a menu bar on the left side and dynamically updates
+ * the right-side content area with new panels as needed.
+ */
 public class MainPanel extends JPanel {
 
     private MainMenu menu;
@@ -32,7 +42,11 @@ public class MainPanel extends JPanel {
         add(contentArea, "grow, gap 10 1 0 1");
     }
 
-    // Method để thay đổi content
+    /**
+     * Sets the content panel of the content area and refreshes the layout.
+     *
+     * @param panel the JPanel to be displayed in the content area
+     */
     public void setContent(JPanel panel) {
         SwingUtilities.invokeLater(() -> {
             contentArea.removeAll();

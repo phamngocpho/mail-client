@@ -8,6 +8,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 
+/**
+ * Utility class for managing configuration properties and related settings.
+ * This class is responsible for loading and providing access to application
+ * configuration values defined in the `local.properties` file.
+ * <p>
+ * The class initializes the property values upon loading by invoking the `loadProperties`
+ * method. If the file cannot be loaded, an error message is logged and displayed via
+ * the notification system.
+ */
 public class ConfigUtils {
     private static final Properties properties = new Properties();
     private static boolean loaded = false;

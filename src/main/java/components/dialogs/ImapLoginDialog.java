@@ -13,7 +13,6 @@ import utils.Constants;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.Objects;
 
 /**
  * Dialog để nhập thông tin IMAP và kết nối
@@ -23,7 +22,6 @@ public class ImapLoginDialog extends JDialog {
     private JTextField hostField;
     private JTextField emailField;
     private JPasswordField passwordField;
-    private JComboBox<String> providerCombo;
     private JButton connectButton;
 
     private final ImapController imapController;
@@ -167,6 +165,27 @@ public class ImapLoginDialog extends JDialog {
         }
     }
 
+    /**
+     * Establishes a connection to the IMAP server and attempts to auto-configure SMTP settings.
+     * <br>
+     * The method retrieves user-provided host, email, and password input values,
+     * validates these inputs, and triggers the connection process in a background thread
+     * while disabling the "Connect" button temporarily.
+     *
+     * If the connection is successful, both the IMAP and SMTP configurations are completed,
+     * and a success notification is displayed. In case of failure, the user is notified via an error message,
+     * and the "Connect" button is re-enabled for retry.
+     *
+     * <ul>
+     * Steps:
+     * - Validate input fields: host, email, and password.
+     * - Temporarily disable the "Connect" button and update its text to indicate the connection process.
+     * - Use a SwingWorker to connect to the IMAP server and configure SMTP settings in the background.
+     * - Handle exceptions and update the UI based on success or failure.
+     * </ul>
+     *
+     * Exceptions during the connection are caught and logged, and error messages are displayed to the user.
+     */
     private void connect() {
         String host = hostField.getText().trim();
         String email = emailField.getText().trim();

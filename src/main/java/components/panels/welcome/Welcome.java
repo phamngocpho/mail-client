@@ -21,9 +21,7 @@ public class Welcome extends JPanel {
 
         btn.setBackground(Color.decode("#2C2C2C"));
 //        btn.setFocusPainted(false);
-        btn.addActionListener(e -> {
-            FormsManager.getInstance().showForm(new MainPanel());
-        });
+        btn.addActionListener(e -> FormsManager.getInstance().showForm(new MainPanel()));
 
         btn.setPreferredSize(new Dimension(240, 80));
         btn.setMaximumSize(new Dimension(360, 120));

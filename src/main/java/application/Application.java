@@ -10,6 +10,20 @@ import utils.Constants;
 import javax.swing.*;
 import java.awt.*;
 
+/**
+ * The Application class serves as the main entry point for the application.
+ * It extends JFrame to provide a graphical user interface for the desktop application.
+ * <p>
+ * Upon initialization, it configures the main application window by setting its
+ * size, location, and content pane. Additionally, it integrates with other
+ * components such as Notifications, Constants, and FormsManager.
+ * <p>
+ * Responsibilities include:
+ * - Setting up the main application frame with default configurations.
+ * - Displaying a welcome message upon startup.
+ * - Delegating content management to FormsManager.
+ * - Configuring appearance using FlatLaf themes and fonts.
+ */
 public class Application extends JFrame {
     public Application() {
         init();

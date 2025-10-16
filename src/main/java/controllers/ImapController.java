@@ -16,7 +16,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Controller để kết nối ImapService với Inbox GUI
+ * The ImapController class is responsible for managing the interaction between
+ * the IMAP email server and the application's inbox panel. It provides methods
+ * for connecting to the server, loading emails, managing folders, and performing
+ * various operations on email messages.
  */
 public class ImapController {
     private final Inbox inboxPanel;
@@ -301,6 +304,15 @@ public class ImapController {
         worker.execute();
     }
 
+    /**
+     * Generates a File object pointing to a new attachment file in the specified directory.
+     * Ensures the file name is unique by appending a counter to the base name if a file
+     * with the same name already exists.
+     *
+     * @param attachmentDir the directory where the attachment file should be stored
+     * @param safeFilename the sanitized filename to be used for the attachment
+     * @return a File object representing the unique attachment file
+     */
     private static File getAttachmentFile(File attachmentDir, String safeFilename) {
         File attachmentFile = new File(attachmentDir, safeFilename);
 

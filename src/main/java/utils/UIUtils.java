@@ -6,7 +6,7 @@ import javax.swing.*;
 import java.io.File;
 
 /**
- * Tiện ích hỗ trợ giao diện người dùng
+ * Utility class for handling user interface related functionalities.
  */
 public class UIUtils {
     private static final int DEFAULT_ICON_SIZE = 16; // Có thể lấy từ Constants.defaultIconSize nếu cần

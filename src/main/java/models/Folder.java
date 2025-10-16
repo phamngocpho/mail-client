@@ -1,5 +1,10 @@
 package models;
 
+/**
+ * Represents a folder that can contain messages. This class includes details
+ * about the folder's name, path, and message statistics, as well as its
+ * availability for selection.
+ */
 public class Folder {
     private String name;
     private String fullPath;

@@ -5,6 +5,11 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+/**
+ * Represents an email object containing details such as sender, recipients, subject, body, flags,
+ * and attachments. This class provides methods for constructing an email, modifying its properties,
+ * and managing its metadata.
+ */
 public class Email {
     private int messageNumber;
     private String messageId;
