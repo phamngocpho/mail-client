@@ -83,22 +83,49 @@ public class Inbox extends JPanel {
 
     // Controller
     private final ImapController controller;
+    private static ImapController sharedController; // Controller dùng chung
+    private final String folderName;
+    private final String filterMode;
 
-    public Inbox() {
+    public Inbox(String folderName) {
+        this(folderName, "ALL");
+    }
+
+    public Inbox(String folderName, String filterMode) {
+        this.folderName = folderName;
+        this.filterMode = filterMode;
         emails = new ArrayList<>();
         loadIcons();
         init();
-        // Khởi tạo controller
-        this.controller = new ImapController(this);
 
-        // Hiển thị login dialog khi khởi động
-        SwingUtilities.invokeLater(this::showLoginDialog);
+        if (sharedController == null) {
+            sharedController = new ImapController(null, folderName); // null vì sẽ register sau
+            this.controller = sharedController;
+
+            if ("INBOX".equals(folderName)) {
+                SwingUtilities.invokeLater(this::showLoginDialog);
+            }
+        } else {
+            this.controller = sharedController;
+        }
+
+        // Register inbox này với controller
+        controller.registerInbox(this);
+
+        // Load emails nếu đã connected và không phải INBOX (INBOX sẽ load sau khi login)
+        if (controller.isConnected() && !"INBOX".equals(folderName)) {
+            controller.loadFolder(folderName, Constants.EMAILS_PER_PAGE);
+        }
     }
 
     private void loadIcons() {
         starFilledIcon = new FlatSVGIcon("icons/menu/starred.svg", iconSize, iconSize);
         starOutlineIcon = new FlatSVGIcon("icons/inbox/star_outline.svg", iconSize, iconSize);
         selectOutlineIcon = new FlatSVGIcon("icons/inbox/select.svg", iconSize, iconSize);
+    }
+
+    public String getFolderName() {
+        return folderName;
     }
 
     private void init() {
@@ -235,6 +262,12 @@ public class Inbox extends JPanel {
     private void showLoginDialog() {
         Frame parentFrame = (Frame) SwingUtilities.getWindowAncestor(this);
         boolean connected = ImapLoginDialog.showDialog(parentFrame, controller);
+
+        // Load emails cho tất cả các tab sau khi connect
+        if (connected) {
+            controller.setCurrentFolder(folderName);
+            controller.loadFolder(folderName, Constants.EMAILS_PER_PAGE);
+        }
 
         // Nếu user cancel, hiển thị thông báo
         if (!connected) {
@@ -495,7 +528,7 @@ public class Inbox extends JPanel {
         if (email.getBody() == null || email.getBody().isEmpty()) {
             bodyTextArea.setText("Loading email content...");
             if (controller != null && controller.isConnected()) {
-                controller.loadEmailBody(email, "INBOX");
+                controller.loadEmailBody(email, folderName);
             }
         } else {
             bodyTextArea.setText(email.getBody());
@@ -505,14 +538,26 @@ public class Inbox extends JPanel {
         // Tự động đánh dấu là đã đọc
         if (!email.hasFlag("Seen")) {
             // Đánh dấu đã đọc sau 1 giây
-            Timer timer = new Timer(1000, e -> {
-                if (controller != null && controller.isConnected()) {
-                    controller.markAsRead(email, true);
-                }
-            });
-            timer.setRepeats(false);
+            Timer timer = getTimer(email);
             timer.start();
         }
+    }
+
+    private Timer getTimer(Email email) {
+        Timer timer = new Timer(1000, e -> {
+            if (controller != null && controller.isConnected()) {
+                controller.markAsRead(email, true);
+
+                // Refresh nếu đang filter UNREAD
+                if ("UNREAD".equals(filterMode)) {
+                    Timer refreshTimer = new Timer(500, ev -> controller.refresh());
+                    refreshTimer.setRepeats(false);
+                    refreshTimer.start();
+                }
+            }
+        });
+        timer.setRepeats(false);
+        return timer;
     }
 
     /**
@@ -549,15 +594,32 @@ public class Inbox extends JPanel {
      * Load emails (call from controller)
      */
     public void loadEmails(List<Email> emailList) {
-        this.emails = emailList;
+        // Lọc emails theo filterMode
+        if ("STARRED".equals(filterMode)) {
+            this.emails = emailList.stream()
+                    .filter(email -> email.hasFlag("Flagged"))
+                    .collect(java.util.stream.Collectors.toList());
+        } else if ("UNREAD".equals(filterMode)) {
+            this.emails = emailList.stream()
+                    .filter(email -> !email.hasFlag("Seen"))
+                    .collect(java.util.stream.Collectors.toList());
+        } else {
+            this.emails = emailList;
+        }
+
         refreshTable();
 
-        // Hiển thị thông báo nếu không có email
         if (emails.isEmpty()) {
+            String message = "STARRED".equals(filterMode)
+                    ? "No starred emails found"
+                    : "UNREAD".equals(filterMode)
+                    ? "No unread emails found"
+                    : "Your inbox is empty or no emails match the current filter.";
+
             subjectLabel.setText("<html>No emails found</html>");
             fromLabel.setText("");
             dateLabel.setText("");
-            bodyTextArea.setText("Your inbox is empty or no emails match the current filter.");
+            bodyTextArea.setText(message);
         }
     }
 
