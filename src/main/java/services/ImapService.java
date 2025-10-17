@@ -9,6 +9,7 @@ import protocols.imap.ImapException;
 import protocols.imap.ImapParser;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -75,14 +76,18 @@ public class ImapService {
             }
 
             // Fetch tất cả emails
-            return client.fetchEmails(1, messageCount);
+            List<Email> emails = client.fetchEmails(1, messageCount);
+
+            emails.sort(Comparator.comparing(Email::getDate).reversed());
+
+            return emails;
         } catch (ImapException e) {
             throw new ImapException("Failed to fetch folder '" + folderName + "': " + e.getMessage(), e);
         }
     }
 
     /**
-     * Fetch N emails mới nhất
+     * Fetch N emails mới nhất - ĐÃ SỬA: thêm sort để đảm bảo thứ tự nhất quán
      */
     public List<Email> fetchRecentEmails(String folderName, int count) throws ImapException {
         if (!isConnected) {
@@ -99,7 +104,11 @@ public class ImapService {
             // Tính start index
             int start = Math.max(1, messageCount - count + 1);
 
-            return client.fetchEmails(start, messageCount);
+            List<Email> emails = client.fetchEmails(start, messageCount);
+
+            emails.sort(Comparator.comparing(Email::getDate).reversed());
+
+            return emails;
         } catch (ImapException e) {
             throw new ImapException("Failed to fetch recent emails: " + e.getMessage(), e);
         }
