@@ -13,7 +13,9 @@ import javax.swing.*;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The ImapController class is responsible for managing the interaction between
@@ -22,11 +24,14 @@ import java.util.List;
  * various operations on email messages.
  */
 public class ImapController {
-    private Inbox inboxPanel;
+    private final Inbox inboxPanel;
     private final ImapService imapService;
-    private String currentFolder = "INBOX";
+    private String currentFolder;
     private static final Logger logger = LoggerFactory.getLogger(ImapController.class);
     private final List<Inbox> registeredInboxes = new ArrayList<>();
+    private final Map<String, List<Email>> emailCache = new HashMap<>();
+    private final Map<String, Long> cacheTimestamps = new HashMap<>();
+    private static final long CACHE_DURATION = 10 * 60 * 1000;
 
     public ImapController(Inbox inboxPanel, String folderName) {
         this.inboxPanel = inboxPanel;
@@ -54,6 +59,43 @@ public class ImapController {
 
     public void setCurrentFolder(String folderName) {
         this.currentFolder = folderName;
+    }
+
+    /**
+     * Kiểm tra xem cache còn hợp lệ không
+     */
+    private boolean isCacheValid (String folder) {
+        if (!emailCache.containsKey(folder)) {
+            return false;
+        }
+
+        Long timestamp = cacheTimestamps.get(folder);
+        if (timestamp == null) {
+            return false;
+        }
+
+        long now = System.currentTimeMillis();
+        boolean valid = (now - timestamp) < CACHE_DURATION;
+
+        logger.debug("Cache for folder '{}' is {}", folder, valid ? "valid" : "expired");
+        return valid;
+    }
+
+    /**
+     * Lưu emails vào cache
+     */
+    private void cacheEmails(String folder, List<Email> emails) {
+        emailCache.put(folder, new ArrayList<>(emails)); // Copy để tránh reference
+        cacheTimestamps.put(folder, System.currentTimeMillis());
+        logger.debug("Cached {} emails for folder '{}'", emails.size(), folder);
+    }
+
+    /**
+     * Lấy emails từ cache
+     */
+    private List<Email> getCachedEmails(String folder) {
+        List<Email> cached = emailCache.get(folder);
+        return cached != null ? new ArrayList<>(cached) : null; // Copy để tránh modification
     }
 
     /**
@@ -109,6 +151,17 @@ public class ImapController {
      * Load emails from a specific folder
      */
     public void loadFolder(String folderName, int count) {
+        // Kiểm tra cache
+        if (isCacheValid(folderName)) {
+            List<Email> cachedEmails = getCachedEmails(folderName);
+            if (cachedEmails != null) {
+                logger.info("Using cached emails for folder: {}", folderName);
+                notifyAllInboxes(cachedEmails, folderName);
+                return; // Không cần fetch từ server
+            }
+        }
+
+        // Nếu không có cache hoặc cache hết hạn, fetch từ server
         SwingWorker<List<Email>, Void> worker = new SwingWorker<>() {
             @Override
             protected List<Email> doInBackground() throws Exception {
@@ -120,6 +173,7 @@ public class ImapController {
             protected void done() {
                 try {
                     List<Email> emails = get();
+                    cacheEmails(folderName, emails); // Lưu vào cache
                     notifyAllInboxes(emails, folderName);
                 } catch (Exception e) {
                     showError("Failed to load emails: " + e.getMessage());
@@ -134,6 +188,11 @@ public class ImapController {
      * Refresh current folder
      */
     public void refresh() {
+        // Xóa cache khi refresh
+        emailCache.remove(currentFolder);
+        cacheTimestamps.remove(currentFolder);
+        logger.info("Cleared cache for folder: {}", currentFolder);
+
         SwingWorker<List<Email>, Void> worker = new SwingWorker<>() {
             @Override
             protected List<Email> doInBackground() throws Exception {
@@ -144,7 +203,7 @@ public class ImapController {
             protected void done() {
                 try {
                     List<Email> emails = get();
-                    // Notify tất cả inbox đang xem folder này
+                    cacheEmails(currentFolder, emails); // Lưu lại cache mới
                     notifyAllInboxes(emails, currentFolder);
                 } catch (Exception e) {
                     showError("Failed to refresh: " + e.getMessage());
@@ -308,25 +367,28 @@ public class ImapController {
 
                     for (ImapParser.Attachment att : emailBody.attachments) {
                         try {
-                            // DECODE FILENAME TRƯỚC KHI SỬ DỤNG
                             String decodedFilename = ImapParser.decodeFilename(att.filename);
-
-                            // Sanitize filename (loại bỏ ký tự không hợp lệ)
                             String safeFilename = sanitizeFilename(decodedFilename);
 
                             logger.debug("Original: {} → Decoded: {} → Safe: {}",
                                     att.filename, decodedFilename, safeFilename);
 
-                            // Tạo tệp trong thư mục attachments
-                            File attachmentFile = getAttachmentFile(attachmentDir, safeFilename);
+                            File attachmentFile = new File(attachmentDir, safeFilename);
 
-                            // Ghi data vào tệp
-                            try (FileOutputStream fos = new FileOutputStream(attachmentFile)) {
-                                fos.write(att.data);
+                            // Chỉ ghi file nếu chưa tồn tại
+                            if (!attachmentFile.exists()) {
+                                // Đảm bảo tên file unique nếu cần
+                                attachmentFile = getAttachmentFile(attachmentDir, safeFilename);
+
+                                try (FileOutputStream fos = new FileOutputStream(attachmentFile)) {
+                                    fos.write(att.data);
+                                }
+
+                                logger.debug("Saved NEW attachment: {} ({} bytes) to: {}",
+                                        safeFilename, att.data.length, attachmentFile.getAbsolutePath());
+                            } else {
+                                logger.debug("Attachment ALREADY EXISTS, reusing: {}", attachmentFile.getAbsolutePath());
                             }
-
-                            logger.debug("Saved attachment: {} ({} bytes) to: {}",
-                                    safeFilename, att.data.length, attachmentFile.getAbsolutePath());
 
                             email.addAttachment(attachmentFile);
 
@@ -421,6 +483,9 @@ public class ImapController {
      */
     public void disconnect() {
         imapService.disconnect();
+        emailCache.clear();
+        cacheTimestamps.clear();
+        logger.info("Cleared all email cache");
     }
 
     /**
