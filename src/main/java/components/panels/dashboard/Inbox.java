@@ -107,6 +107,10 @@ public class Inbox extends JPanel {
             }
         } else {
             this.controller = sharedController;
+            // Load ngay nếu đã connected
+            if (controller.isConnected()) {
+                controller.loadFolder(folderName, Constants.EMAILS_PER_PAGE);
+            }
         }
 
         // Register inbox này với controller
@@ -116,6 +120,10 @@ public class Inbox extends JPanel {
         if (controller.isConnected() && !"INBOX".equals(folderName)) {
             controller.loadFolder(folderName, Constants.EMAILS_PER_PAGE);
         }
+    }
+
+    public ImapController getController() {
+        return controller;
     }
 
     private void loadIcons() {
@@ -176,8 +184,7 @@ public class Inbox extends JPanel {
 
         // Refresh button
         JButton refreshButton = new JButton(new FlatSVGIcon("icons/inbox/refresh.svg", iconSize, iconSize));
-        refreshButton.putClientProperty(FlatClientProperties.BUTTON_TYPE,
-                FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        refreshButton.putClientProperty(FlatClientProperties.STYLE, "arc: 50; borderColor: null; focusColor: null; background: null");
         refreshButton.setToolTipText("Refresh");
         refreshButton.addActionListener(e -> {
             if (controller != null && controller.isConnected()) {

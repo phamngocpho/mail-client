@@ -217,6 +217,15 @@ public class MainMenu extends JPanel {
                 public void mouseClicked(MouseEvent e) {
                     setSelected(true);
 
+                    // Load emails khi chuyển tab
+                    if (contentPanel instanceof Inbox inbox) {
+                        // Chỉ refresh nếu đã connected
+                        if (inbox.getController() != null && inbox.getController().isConnected()) {
+                            inbox.getController().setCurrentFolder(inbox.getFolderName());
+                            inbox.getController().loadFolder(inbox.getFolderName(), Constants.EMAILS_PER_PAGE);
+                        }
+                    }
+
                     // Gọi listener để thông báo cho MainPanel cập nhật nội dung
                     if (clickListener != null && contentPanel != null) {
                         clickListener.onMenuItemClicked(contentPanel);
