@@ -171,7 +171,7 @@ public class ImapLoginDialog extends JDialog {
      * The method retrieves user-provided host, email, and password input values,
      * validates these inputs, and triggers the connection process in a background thread
      * while disabling the "Connect" button temporarily.
-     *
+     * <p>
      * If the connection is successful, both the IMAP and SMTP configurations are completed,
      * and a success notification is displayed. In case of failure, the user is notified via an error message,
      * and the "Connect" button is re-enabled for retry.
