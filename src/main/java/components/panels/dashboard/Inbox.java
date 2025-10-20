@@ -634,8 +634,8 @@ public class Inbox extends JPanel {
      * Refresh table
      */
     private void refreshTable() {
-        // Sort emails by date DESC (newest)
-        emails.sort(Comparator.comparing(Email::getDate).reversed());
+        // Sort emails by date DESC (newest) - handle null dates
+        emails.sort(Comparator.comparing(Email::getDate, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
 
         tableModel.setRowCount(0);
 

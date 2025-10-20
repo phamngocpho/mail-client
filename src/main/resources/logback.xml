@@ -49,8 +49,10 @@
     </root>
 
     <!-- Logger riêng cho package -->
-    <logger name="controllers" level="DEBUG" />
-    <logger name="services" level="DEBUG" />
+    <logger name="controllers" level="INFO" />
+    <logger name="services" level="INFO" />
+    <logger name="protocols.imap" level="INFO" />
+    <logger name="protocols.imap.ImapParser" level="INFO" />
     <logger name="components" level="INFO" />
 
     <!-- Tắt log verbose của thư viện bên ngoài -->

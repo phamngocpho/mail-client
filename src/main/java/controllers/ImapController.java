@@ -31,7 +31,6 @@ public class ImapController {
     private final List<Inbox> registeredInboxes = new ArrayList<>();
     private final Map<String, List<Email>> emailCache = new HashMap<>();
     private final Map<String, Long> cacheTimestamps = new HashMap<>();
-    private static final long CACHE_DURATION = 10 * 60 * 1000;
 
     public ImapController(Inbox inboxPanel, String folderName) {
         this.inboxPanel = inboxPanel;
@@ -75,7 +74,7 @@ public class ImapController {
         }
 
         long now = System.currentTimeMillis();
-        boolean valid = (now - timestamp) < CACHE_DURATION;
+        boolean valid = (now - timestamp) < Constants.CACHE_DURATION;
 
         logger.debug("Cache for folder '{}' is {}", folder, valid ? "valid" : "expired");
         return valid;
@@ -355,6 +354,11 @@ public class ImapController {
                     email.setHtml(!emailBody.html.isEmpty());
 
                     logger.debug("Email body loaded. Attachments count: {}", emailBody.attachments.size());
+                    logger.debug("Email body loaded. Attachments count: {}", emailBody.attachments.size());
+                    logger.debug("Plain text preview (first 200 chars): {}",
+                            emailBody.plainText.substring(0, Math.min(200, emailBody.plainText.length())));
+                    logger.debug("HTML preview (first 200 chars): {}",
+                            emailBody.html.substring(0, Math.min(200, emailBody.html.length())));
 
                     // Tạo thư mục attachments trong project nếu chưa tồn tại
                     File attachmentDir = new File("attachments");

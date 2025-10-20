@@ -77,8 +77,26 @@ public class ImapService {
 
             // Fetch tất cả emails
             List<Email> emails = client.fetchEmails(1, messageCount);
+            
+            logger.debug("Fetched {} emails before filtering", emails.size());
 
-            emails.sort(Comparator.comparing(Email::getDate).reversed());
+            // Lọc bỏ emails không hợp lệ (không có Subject hoặc From - chỉ có internal headers)
+            int beforeFilter = emails.size();
+            emails.removeIf(email -> {
+                boolean invalid = (email.getSubject() == null || email.getSubject().isEmpty()) && 
+                                  (email.getFrom() == null || email.getFrom().isEmpty());
+                if (invalid) {
+                    logger.debug("Filtering out invalid email - Subject: [{}], From: [{}]", 
+                        email.getSubject(), email.getFrom());
+                }
+                return invalid;
+            });
+            
+            int afterFilter = emails.size();
+            logger.info("Filtered {} invalid emails, remaining: {}", beforeFilter - afterFilter, afterFilter);
+
+            // Sort với nullsLast để xử lý emails không có Date
+            emails.sort(Comparator.comparing(Email::getDate, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
 
             return emails;
         } catch (ImapException e) {
@@ -105,8 +123,26 @@ public class ImapService {
             int start = Math.max(1, messageCount - count + 1);
 
             List<Email> emails = client.fetchEmails(start, messageCount);
+            
+            logger.debug("Fetched {} emails before filtering", emails.size());
 
-            emails.sort(Comparator.comparing(Email::getDate).reversed());
+            // Lọc bỏ emails không hợp lệ (không có Subject hoặc From - chỉ có internal headers)
+            int beforeFilter = emails.size();
+            emails.removeIf(email -> {
+                boolean invalid = (email.getSubject() == null || email.getSubject().isEmpty()) && 
+                                  (email.getFrom() == null || email.getFrom().isEmpty());
+                if (invalid) {
+                    logger.debug("Filtering out invalid email - Subject: [{}], From: [{}]", 
+                        email.getSubject(), email.getFrom());
+                }
+                return invalid;
+            });
+            
+            int afterFilter = emails.size();
+            logger.info("Filtered {} invalid emails, remaining: {}", beforeFilter - afterFilter, afterFilter);
+
+            // Sort với nullsLast để xử lý emails không có Date
+            emails.sort(Comparator.comparing(Email::getDate, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
 
             return emails;
         } catch (ImapException e) {

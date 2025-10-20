@@ -3,7 +3,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import raven.toast.Notifications;
 
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
@@ -28,7 +27,10 @@ public class ConfigUtils {
     }
 
     private static void loadProperties() {
-        try (InputStream input = new FileInputStream(Constants.resources + "local.properties")) {
+        try (InputStream input = ConfigUtils.class.getClassLoader().getResourceAsStream("local.properties")) {
+            if (input == null) {
+                throw new IOException("local.properties not found in classpath");
+            }
             properties.load(input);
             loaded = true;
             logger.info("Loaded local.properties successfully");

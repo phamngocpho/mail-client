@@ -4,6 +4,7 @@ import models.Email;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -84,7 +85,7 @@ public class ImapParser {
     }
 
     /**
-     * Extract header content từ BODY[HEADER.FIELDS ...]
+     * Extract header content từ BODY[HEADER] hoặc BODY[HEADER.FIELDS ...]
      */
     private static String extractHeaders(String response) {
         int startIdx = response.indexOf("BODY[HEADER");
@@ -93,10 +94,47 @@ public class ImapParser {
         int headerStart = response.indexOf("\r\n", startIdx);
         if (headerStart == -1) return null;
 
-        int headerEnd = response.indexOf(")\r\n", headerStart);
-        if (headerEnd == -1) headerEnd = response.length();
+        // Headers kết thúc bằng \r\n\r\n (double CRLF), sau đó là )
+        int headerEnd = response.indexOf("\r\n\r\n)", headerStart);
+        if (headerEnd == -1) {
+            // Fallback: tìm )\r\n
+            headerEnd = response.indexOf(")\r\n", headerStart);
+            if (headerEnd == -1) headerEnd = response.length();
+        } else {
+            // Bao gồm cả \r\n\r\n
+            headerEnd += 4; // +4 để include \r\n\r\n, nhưng không include )
+        }
 
-        return response.substring(headerStart + 2, headerEnd);
+        String headers = response.substring(headerStart + 2, headerEnd);
+        
+        // Debug log để kiểm tra header extraction
+        logger.debug("Extracted headers length: {} chars", headers.length());
+        if (headers.length() > 500) {
+            logger.debug("Headers preview (first 500 chars): {}", headers.substring(0, 500));
+        } else {
+            logger.debug("Full headers: {}", headers);
+        }
+        
+        // Check if Subject is truncated
+        int subjectIdx = headers.indexOf("Subject:");
+        if (subjectIdx != -1) {
+            int subjectEnd = headers.indexOf("\r\n", subjectIdx);
+            if (subjectEnd == -1) subjectEnd = headers.length();
+            String subjectLine = headers.substring(subjectIdx, subjectEnd);
+            logger.debug("Extracted subject line: [{}]", subjectLine);
+            
+            // Check for continuation (folded header)
+            int nextLineStart = subjectEnd + 2;
+            while (nextLineStart < headers.length() && 
+                   (headers.charAt(nextLineStart) == ' ' || headers.charAt(nextLineStart) == '\t')) {
+                int nextLineEnd = headers.indexOf("\r\n", nextLineStart);
+                if (nextLineEnd == -1) nextLineEnd = headers.length();
+                logger.debug("Subject continuation: [{}]", headers.substring(nextLineStart, nextLineEnd));
+                nextLineStart = nextLineEnd + 2;
+            }
+        }
+        
+        return headers;
     }
 
     /**
@@ -159,7 +197,12 @@ public class ImapParser {
                 }
                 break;
             case "SUBJECT":
-                email.setSubject(decodeSubject(value));
+                logger.debug("=== SUBJECT PROCESSING ===");
+                logger.debug("Raw subject value: [{}]", value);
+                logger.debug("Raw subject length: {} chars", value.length());
+                String decodedSubject = decodeSubject(value);
+                logger.debug("Decoded subject: [{}]", decodedSubject);
+                email.setSubject(decodedSubject);
                 break;
             case "DATE":
                 email.setDate(parseDate(value));
@@ -183,29 +226,177 @@ public class ImapParser {
     }
 
     /**
-     * Decodes a subject string encoded in RFC 2047 format with UTF-8 and Base64 encoding.
-     * <p>
-     * The method identifies sections of the subject formatted as "=?UTF-8?B?...?=",
-     * decodes the Base64 payload, and builds a plaintext representation of the subject.
+     * Decodes a subject string encoded in RFC 2047 format.
+     * Supports multiple charsets (UTF-8, ISO-8859-1, etc.) and both Base64 (B) and Quoted-Printable (Q) encodings.
+     * Handles line-wrapped encoded text and multiple encoded sections.
      *
-     * @param subject The subject string to decode. This string may contain encoded sections
-     *                following the RFC 2047 format.
-     * @return The decoded plain text subject. If no encoded sections are found, the original
-     *         subject is returned unmodified.
+     * @param subject The subject string to decode. May contain encoded sections like "=?charset?encoding?text?="
+     * @return The decoded plain text subject. If decoding fails, returns the original subject.
      */
     private static String decodeSubject(String subject) {
-        Pattern pattern = Pattern.compile("=\\?UTF-8\\?B\\?([^?]+)\\?=");
-        Matcher matcher = pattern.matcher(subject);
-
-        StringBuilder result = new StringBuilder();
-        while (matcher.find()) {
-            String encoded = matcher.group(1);
-            String decoded = new String(Base64.getDecoder().decode(encoded));
-            matcher.appendReplacement(result, Matcher.quoteReplacement(decoded));
+        if (subject == null || subject.isEmpty()) {
+            return subject;
         }
-        matcher.appendTail(result);
 
-        return result.toString();
+        try {
+            logger.debug("Original subject: {}", subject);
+            
+            // Step 1: First, collapse multiple whitespace to single space
+            String normalized = subject.replaceAll("\\s+", " ").trim();
+            
+            // Step 2: Fix malformed encoded-words by removing spaces within =?...?= blocks
+            // Remove space after =?
+            normalized = normalized.replaceAll("=\\?\\s+", "=?");
+            // Remove space before ?=
+            normalized = normalized.replaceAll("\\s+\\?=", "?=");
+            // Remove spaces around encoding: ? B ? → ?B?
+            normalized = normalized.replaceAll("\\?\\s+([BQbq])\\s+\\?", "?$1?");
+            
+            // Step 3: Remove spaces WITHIN charset portion (e.g., "=?U TF-8?B?" → "=?UTF-8?B?")
+            // This handles cases where charset is split: =?UTF- 8?B? or =?U TF-8?B?
+            // Apply multiple times to handle multiple-word charsets
+            Pattern charsetFixPattern = Pattern.compile("=\\?([A-Za-z0-9\\-]+)\\s+([A-Za-z0-9\\-]+)\\?([BQbq])\\?");
+            int maxIterations = 5; // Prevent infinite loops
+            for (int i = 0; i < maxIterations; i++) {
+                Matcher charsetMatcher = charsetFixPattern.matcher(normalized);
+                StringBuffer sb = new StringBuffer();
+                boolean found = false;
+                while (charsetMatcher.find()) {
+                    found = true;
+                    String part1 = charsetMatcher.group(1);
+                    String part2 = charsetMatcher.group(2);
+                    String encoding = charsetMatcher.group(3);
+                    charsetMatcher.appendReplacement(sb, "=?" + part1 + part2 + "?" + encoding + "?");
+                }
+                charsetMatcher.appendTail(sb);
+                normalized = sb.toString();
+                if (!found) break; // No more matches, we're done
+            }
+            
+            // Step 4: Merge adjacent encoded-words (RFC 2047 allows splitting long subjects)
+            // Pattern: =?...?= followed by whitespace and another =?...?=
+            normalized = normalized.replaceAll("\\?=\\s+=\\?", "?==?");
+            
+            logger.debug("Normalized subject: {}", normalized);
+            
+            // RFC 2047 pattern: =?charset?encoding?encoded-text?=
+            // Supports any charset, B (Base64) or Q (Quoted-Printable) encoding
+            Pattern pattern = Pattern.compile("=\\?([^?\\s]+)\\?([BQbq])\\?([^?]+)\\?=");
+            Matcher matcher = pattern.matcher(normalized);
+
+            StringBuilder result = new StringBuilder();
+            int lastEnd = 0;
+            boolean hasMatch = false;
+
+            while (matcher.find()) {
+                hasMatch = true;
+                // Add any text before this match
+                result.append(normalized.substring(lastEnd, matcher.start()));
+
+                String charset = matcher.group(1).trim();
+                String encoding = matcher.group(2).toUpperCase();
+                String encodedText = matcher.group(3).trim();
+
+                logger.debug("Decoding: charset={}, encoding={}, text length={}", 
+                        charset, encoding, encodedText.length());
+
+                try {
+                    String decoded;
+                    if ("B".equals(encoding)) {
+                        // Base64 decode
+                        // Remove any remaining whitespace from encoded text
+                        encodedText = encodedText.replaceAll("\\s+", "");
+                        byte[] decodedBytes = Base64.getDecoder().decode(encodedText);
+                        decoded = new String(decodedBytes, charset);
+                    } else {
+                        // Quoted-Printable decode
+                        // In Q encoding, underscore represents space
+                        encodedText = encodedText.replace("_", " ");
+                        decoded = decodeQuotedPrintable(encodedText);
+                    }
+                    result.append(decoded);
+                    logger.debug("Successfully decoded to: {}", decoded);
+                } catch (Exception e) {
+                    logger.warn("Failed to decode subject part: charset={}, encoding={}, text={}, error={}", 
+                            charset, encoding, 
+                            encodedText.substring(0, Math.min(50, encodedText.length())),
+                            e.getMessage());
+                    // If decode fails, append the original encoded text
+                    result.append(matcher.group(0));
+                }
+
+                lastEnd = matcher.end();
+            }
+
+            // Add any remaining text after the last match
+            result.append(normalized.substring(lastEnd));
+            
+            String finalResult = result.toString().trim();
+            
+            // If no match was found and subject looks like it might be encoded, try a more lenient pattern
+            if (!hasMatch && subject.contains("=?")) {
+                logger.warn("Subject appears to be encoded but standard pattern didn't match: {}", normalized);
+                logger.warn("Attempting lenient decoding...");
+                
+                // Try a more lenient pattern that allows spaces in charset
+                // Pattern: =? (any chars) ? (B or Q) ? (encoded text) ?=
+                Pattern lenientPattern = Pattern.compile("=\\?([A-Za-z0-9\\-\\s]+?)\\?([BQbq])\\?([^?]+)\\?=");
+                Matcher lenientMatcher = lenientPattern.matcher(normalized);
+                
+                StringBuilder lenientResult = new StringBuilder();
+                int lenientLastEnd = 0;
+                boolean lenientMatch = false;
+                
+                while (lenientMatcher.find()) {
+                    lenientMatch = true;
+                    lenientResult.append(normalized.substring(lenientLastEnd, lenientMatcher.start()));
+                    
+                    String charset = lenientMatcher.group(1).replaceAll("\\s+", ""); // Remove all spaces from charset
+                    String encoding = lenientMatcher.group(2).toUpperCase();
+                    String encodedText = lenientMatcher.group(3).trim();
+                    
+                    logger.debug("Lenient decoding: charset={}, encoding={}, text length={}", 
+                            charset, encoding, encodedText.length());
+                    
+                    try {
+                        String decoded;
+                        if ("B".equals(encoding)) {
+                            encodedText = encodedText.replaceAll("\\s+", "");
+                            byte[] decodedBytes = Base64.getDecoder().decode(encodedText);
+                            decoded = new String(decodedBytes, charset);
+                        } else {
+                            encodedText = encodedText.replace("_", " ");
+                            decoded = decodeQuotedPrintable(encodedText);
+                        }
+                        lenientResult.append(decoded);
+                        logger.debug("Lenient decode successful: {}", decoded);
+                    } catch (Exception e) {
+                        logger.warn("Lenient decode failed: {}", e.getMessage());
+                        lenientResult.append(lenientMatcher.group(0));
+                    }
+                    
+                    lenientLastEnd = lenientMatcher.end();
+                }
+                
+                if (lenientMatch) {
+                    lenientResult.append(normalized.substring(lenientLastEnd));
+                    String lenientFinal = lenientResult.toString().trim();
+                    logger.debug("Lenient decoded subject: {}", lenientFinal);
+                    return lenientFinal;
+                }
+                
+                // If even lenient pattern fails, return normalized version (not original)
+                logger.warn("Both standard and lenient patterns failed, returning normalized subject");
+                return normalized;
+            }
+            
+            logger.debug("Final decoded subject: {}", finalResult);
+            return finalResult;
+            
+        } catch (Exception e) {
+            logger.error("Error decoding subject: {}", e.getMessage(), e);
+            return subject;
+        }
     }
 
     /**
@@ -280,6 +471,8 @@ public class ImapParser {
     private static EmailBody extractRawBody(String response) {
         EmailBody body = new EmailBody();
 
+        logger.debug("Response length: {} bytes", response.length());
+
         int bodyStart = response.indexOf("BODY[]");
         if (bodyStart == -1) {
             return body;
@@ -336,6 +529,8 @@ public class ImapParser {
      * @param body The EmailBody object to populate with the extracted plain text and HTML content.
      */
     private static void parseMultipart(String content, String boundary, EmailBody body) {
+        logger.debug("Boundary: {}", boundary);
+        logger.debug("Content length: {} bytes", content.length());
         String[] parts = content.split(Pattern.quote(boundary));
 
         for (int i = 1; i < parts.length; i++) {
@@ -383,8 +578,16 @@ public class ImapParser {
             // Parse text/plain
             if (headers.toLowerCase().contains("content-type: text/plain") ||
                     headers.toLowerCase().contains("content-type:text/plain")) {
+                logger.debug("Found text/plain part");
+                logger.debug("Encoding: {}, Charset: {}", encoding, charset);
+                logger.debug("Raw content preview (200 chars): {}",
+                        partContent.substring(0, Math.min(200, partContent.length())));
+
                 body.plainText = decodeContent(partContent.trim(), encoding, charset);
-                logger.debug("Extracted plain text ({} chars) with charset: {}", body.plainText.length(), charset);
+
+                logger.debug("Decoded plain text ({} chars)", body.plainText.length());
+                logger.debug("Decoded preview (200 chars): {}",
+                        body.plainText.substring(0, Math.min(200, body.plainText.length())));
             }
 
             // Parse text/html
@@ -425,6 +628,12 @@ public class ImapParser {
         String charset = extractCharsetFromHeaders(headers);
         String encoding = extractEncodingFromHeaders(headers);
 
+        logger.debug("Headers preview (300 chars): {}",
+                headers.substring(0, Math.min(300, headers.length())));
+        logger.debug("Detected charset: {}, encoding: {}", charset, encoding);
+        logger.debug("Content preview (200 chars): {}",
+                content.substring(0, Math.min(200, content.length())));
+
         return decodeContent(content, encoding, charset);
     }
 
@@ -445,7 +654,18 @@ public class ImapParser {
         );
         Matcher matcher = pattern.matcher(headers);
         if (matcher.find()) {
-            return matcher.group(1).trim();
+            String encoding = matcher.group(1).trim();
+
+            // Chỉ lấy phần encoding hợp lệ (trước dấu ; hoặc space)
+            if (encoding.contains(";")) {
+                encoding = encoding.substring(0, encoding.indexOf(";")).trim();
+            }
+            if (encoding.contains(":")) {
+                encoding = encoding.substring(0, encoding.indexOf(":")).trim();
+            }
+
+            logger.debug("Extracted encoding: '{}'", encoding);
+            return encoding;
         }
         return "7bit";
     }
@@ -614,6 +834,18 @@ public class ImapParser {
             // Normalize charset name
             charset = normalizeCharset(charset);
 
+            logger.debug("Encoding: {}, Charset: {}", encoding, charset);
+            logger.debug("Content length: {} bytes", content.length());
+            logger.debug("Content preview (100 chars): {}", content.substring(0, Math.min(100, content.length())));
+
+            // Auto-detect quoted-printable if encoding header is missing/wrong but content looks like QP
+            if (!encoding.equalsIgnoreCase("quoted-printable") && 
+                !encoding.equalsIgnoreCase("base64") &&
+                content.matches("(?s).*=[0-9A-Fa-f]{2}.*")) {
+                logger.debug("Auto-detected Quoted-Printable encoding from content pattern");
+                encoding = "quoted-printable";
+            }
+
             switch (encoding.toLowerCase().trim()) {
                 case "base64":
                     StringBuilder cleanBase64 = new StringBuilder(
@@ -629,9 +861,10 @@ public class ImapParser {
                     break;
 
                 case "quoted-printable":
+                    logger.debug("Before QP decode: {}", content.substring(0, Math.min(100, content.length())));
                     String decoded = decodeQuotedPrintable(content);
-                    // Convert from ISO-8859-1 to a specified charset if needed
-                    return new String(decoded.getBytes(StandardCharsets.ISO_8859_1), charset);
+                    logger.debug("After QP decode: {}", decoded.substring(0, Math.min(100, decoded.length())));
+                    return decoded;
 
                 case "7bit":
                 case "8bit":
@@ -760,20 +993,60 @@ public class ImapParser {
      */
     private static String decodeQuotedPrintable(String qp) {
         if (qp == null) return "";
-        qp = qp.replaceAll("=\\r?\\n", "");
+
+        logger.debug("QP Input preview (200 chars): [{}]", qp.substring(0, Math.min(200, qp.length())));
+
+        // Fix soft breaks: Remove = + optional spaces + \r?\n + optional spaces (không thêm space mới)
+        qp = qp.replaceAll("=\\s*\\r?\\n\\s*", "");  // → "notice d" thành "noticed"
+
+        // Decode =XX hex (giữ nguyên)
         Pattern hexPattern = Pattern.compile("=([0-9A-Fa-f]{2})");
         Matcher hexMatcher = hexPattern.matcher(qp);
-        StringBuilder sb = new StringBuilder();
+
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        int lastEnd = 0;
+
         while (hexMatcher.find()) {
             try {
+                String beforeMatch = qp.substring(lastEnd, hexMatcher.start());
+                baos.write(beforeMatch.getBytes(StandardCharsets.ISO_8859_1));
+
                 int hexValue = Integer.parseInt(hexMatcher.group(1), 16);
-                hexMatcher.appendReplacement(sb, String.valueOf((char) hexValue));
-            } catch (Exception ignored) {
-                hexMatcher.appendReplacement(sb, hexMatcher.group(0));
+                baos.write(hexValue);
+
+                lastEnd = hexMatcher.end();
+            } catch (Exception e) {
+                logger.warn("Invalid hex in QP: {} (keeping raw)", hexMatcher.group(0));
+                String raw = qp.substring(lastEnd, hexMatcher.end());
+                try {
+                    baos.write(raw.getBytes(StandardCharsets.ISO_8859_1));
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
+                lastEnd = hexMatcher.end();
             }
         }
-        hexMatcher.appendTail(sb);
-        return sb.toString();
+
+        try {
+            String remaining = qp.substring(lastEnd);
+            baos.write(remaining.getBytes(StandardCharsets.ISO_8859_1));
+        } catch (Exception e) {
+            logger.error("Error adding remaining text: {}", e.getMessage());
+        }
+
+        try {
+            String result = baos.toString(StandardCharsets.UTF_8);
+
+            // Final clean: Loại multiple spaces/newlines, trim edges
+            result = result.replaceAll("\\s+", " ").trim();
+
+            logger.debug("QP Output preview (200 chars): [{}]", result.substring(0, Math.min(200, result.length())));
+
+            return result;
+        } catch (Exception e) {
+            logger.error("Error converting to UTF-8: {}", e.getMessage());
+            return qp;
+        }
     }
 
     private static boolean isValidBase64(String str) {
@@ -883,5 +1156,92 @@ public class ImapParser {
             logger.error("Failed to decode filename: {}", filename, e);
             return filename;
         }
+    }
+
+    public static void main(String[] args) {
+        
+        // Test case 1: Hex decode (tiếng Việt)
+        String input1 = "Hi Ph=E1=BA=A1m";
+        String output1 = decodeQuotedPrintable(input1);
+        System.out.println("Test 1 - Input: " + input1);
+        System.out.println("Test 1 - Expected: Hi Phạm");
+        System.out.println("Test 1 - Actual: " + output1 + " (Đúng nếu = 'Hi Phạm')");
+        System.out.println();
+
+        // Test case 2: Soft break chuẩn (không space)
+        String input2 = "We notice=\r\n d you";
+        String output2 = decodeQuotedPrintable(input2);
+        System.out.println("Test 2 - Input: " + input2.replace("\r\n", "\\r\\n"));
+        System.out.println("Test 2 - Expected: We noticed you");
+        System.out.println("Test 2 - Actual: " + output2 + " (Đúng nếu nối liền)");
+        System.out.println();
+
+        // Test case 3: Với space sau = (lỗi phổ biến)
+        String input3 = "We notice= \r\n d you";
+        String output3 = decodeQuotedPrintable(input3);
+        System.out.println("Test 3 - Input: " + input3.replace("\r\n", "\\r\\n"));
+        System.out.println("Test 3 - Expected: We noticed you");
+        System.out.println("Test 3 - Actual: " + output3 + " (Sai nếu vẫn có space, cần fix regex)");
+        System.out.println();
+
+        // Test case 4: Sample từ email (truncated)
+        String input4 = "<div dir=3D\"ltr\"><div>Hi Ph=E1=BA=A1m,</div><div><br /></div><div>We notice= d you started the process to upgrade to Cursor Pro but didn't complete it.</div>";
+        String output4 = decodeQuotedPrintable(input4);
+        System.out.println("Test 4 - Input preview: " + input4.substring(0, 100) + "...");
+        System.out.println("Test 4 - Expected preview: <div dir=\"ltr\"><div>Hi Phạm,</div>...We noticed you...");
+        System.out.println("Test 4 - Actual preview: " + output4.substring(0, 100) + "...");
+        System.out.println();
+
+        // Test case 5: UTF-8 Base64 encoded subject
+        String subject1 = "=?UTF-8?B?VuG7qSB2aeG7h2MgbuG7mXAgbuG7mXAgbmjhu4i7jWM=?= 2025-2026";
+        String decoded1 = decodeSubject(subject1);
+        System.out.println("Test 5 - Input: " + subject1);
+        System.out.println("Test 5 - Actual: " + decoded1);
+        System.out.println();
+
+        // Test case 6: Line-wrapped subject (like in the screenshot)
+        String subject2 = "=?UTF-8?B?\nVuG7qSB2aeG7h2MgbuG7mXAgbuG7mXAgbmjhu4i7jWMgGjDrSBo4bu\n?= 2025-2026";
+        String decoded2 = decodeSubject(subject2);
+        System.out.println("Test 6 - Input (wrapped): " + subject2.replace("\n", "\\n"));
+        System.out.println("Test 6 - Actual: " + decoded2);
+        System.out.println();
+
+        // Test case 7: Quoted-Printable subject
+        String subject3 = "=?UTF-8?Q?Hello_Ph=E1=BA=A1m?=";
+        String decoded3 = decodeSubject(subject3);
+        System.out.println("Test 7 - Input: " + subject3);
+        System.out.println("Test 7 - Expected: Hello Phạm");
+        System.out.println("Test 7 - Actual: " + decoded3);
+        System.out.println();
+
+        // Test case 8: Multiple encoded sections
+        String subject4 = "=?UTF-8?B?SGVsbG8=?= =?UTF-8?B?IFdvcmxk?=";
+        String decoded4 = decodeSubject(subject4);
+        System.out.println("Test 8 - Input: " + subject4);
+        System.out.println("Test 8 - Expected: Hello World");
+        System.out.println("Test 8 - Actual: " + decoded4);
+        System.out.println();
+
+        // Test case 9: Mixed encoded and plain text
+        String subject5 = "Re: =?UTF-8?B?VGjDtG5nIGLDoW8=?= - Important";
+        String decoded5 = decodeSubject(subject5);
+        System.out.println("Test 9 - Input: " + subject5);
+        System.out.println("Test 9 - Actual: " + decoded5);
+        System.out.println();
+        
+        // Test case 10: Malformed subject with space in charset (the bug from screenshot)
+        String subject6 = "=?U TF-8?B?xJDhu4MgY+G6rXAgbmjhuq10IGThu68gbGnhu4d1IGdpYSBo4bqhbiBCSOG7iVQgbsSDbSAyMDI2?=";
+        String decoded6 = decodeSubject(subject6);
+        System.out.println("Test 10 - Input (malformed with space in charset): " + subject6);
+        System.out.println("Test 10 - Expected: Để cập nhật dữ liệu gia hạn BHYT năm 2026");
+        System.out.println("Test 10 - Actual: " + decoded6);
+        System.out.println();
+        
+        // Test case 11: Very malformed subject with newline in charset
+        String subject7 = "=?UTF- 8?B?VuG7gSB2aeG7h2MgbuG7mXAgaOG7jWMgcGjDrQ==?=";
+        String decoded7 = decodeSubject(subject7);
+        System.out.println("Test 11 - Input (malformed with space after UTF-): " + subject7);
+        System.out.println("Test 11 - Expected: Về việc nộp học phí");
+        System.out.println("Test 11 - Actual: " + decoded7);
     }
 }

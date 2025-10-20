@@ -8,7 +8,7 @@ import java.awt.*;
  * for IMAP and SMTP, timeout settings, server command strings, response codes,
  * UI-related attributes, and other utility properties.
  * <p>
- * This class is designed for easy access to widely-used constant values without
+ * This class is designed for easy access to widely used constant values without
  * the need for instantiation. All fields in this class are declared `public static`
  * and are intended to be immutable.
  * <p>
@@ -67,6 +67,7 @@ public class Constants {
 
     // Number of emails to fetch per request
     public static final int EMAILS_PER_PAGE = 50;
+    public static final long CACHE_DURATION = 5 * 60 * 1000;
 
     public static Toolkit toolkit = Toolkit.getDefaultToolkit();
     public static Dimension dimension = toolkit.getScreenSize();

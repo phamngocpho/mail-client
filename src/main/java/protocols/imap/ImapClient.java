@@ -147,12 +147,20 @@ public class ImapClient {
         String tag = nextTag();
 
         // CHỈ FETCH HEADERS - KHÔNG FETCH BODY
-        String command = String.format("%s FETCH %d:%d (FLAGS BODY[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID)])",
+        // Dùng BODY.PEEK[HEADER] để tránh truncation của subjects dài
+        String command = String.format("%s FETCH %d:%d (FLAGS BODY.PEEK[HEADER])",
                 tag, start, end);
 
         logger.debug("→ {}", command);
         sendCommand(command);
         String response = readFullResponse(tag);
+        
+        logger.debug("FETCH response length: {} bytes", response.length());
+        if (!response.isEmpty() && response.length() <= 5000) {
+            logger.debug("Full FETCH response: {}", response);
+        } else if (response.length() > 5000) {
+            logger.debug("FETCH response preview (first 5000 chars): {}", response.substring(0, 5000));
+        }
 
         if (ImapParser.isError(response, tag)) {
             throw new ImapException(command, response, "Failed to fetch emails");
@@ -179,6 +187,10 @@ public class ImapClient {
         logger.debug("→ {}", command);
         sendCommand(command);
         String response = readFullResponse(tag);
+
+        logger.debug("Raw IMAP response length: {} bytes", response.length());
+        logger.debug("Raw response preview (first 500 chars): {}",
+                response.substring(0, Math.min(500, response.length())));
 
         if (ImapParser.isError(response, tag)) {
             throw new ImapException(command, response, "Failed to fetch email body");
