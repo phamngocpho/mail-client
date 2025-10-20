@@ -45,7 +45,5 @@ public class Application extends JFrame {
         FlatMacDarkLaf.setup();
         UIManager.put("defaultFont", new Font(FlatRobotoFont.FAMILY, Font.PLAIN, Constants.systemFont.getSize() + 3));
         EventQueue.invokeLater(() -> new Application().setVisible(true));
-
-//        FormsManager.getInstance().showForm(new JPanel);
     }
 }

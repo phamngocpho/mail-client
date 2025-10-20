@@ -9,7 +9,6 @@
     <version>1.0-SNAPSHOT</version>
 
     <dependencies>
-        <!-- Interface -->
         <dependency>
             <groupId>com.formdev</groupId>
             <artifactId>flatlaf</artifactId>
@@ -31,63 +30,24 @@
             <version>11.2</version>
         </dependency>
 
-
         <dependency>
-            <groupId>TimingFramework-0.55</groupId>
-            <artifactId>TimingFramework-0.55</artifactId>
-            <version>1.0-SNAPSHOT</version>
-            <scope>system</scope>
-            <systemPath>${basedir}/lib/TimingFramework-0.55.jar</systemPath>
-        </dependency>
-
-        <dependency>
-            <groupId>swing-toast-notifications-1.0.1</groupId>
-            <artifactId>swing-toast-notifications-1.0.1</artifactId>
-            <version>1.0-SNAPSHOT</version>
-            <scope>system</scope>
-            <systemPath>${basedir}/lib/swing-toast-notifications-1.0.1.jar</systemPath>
+            <groupId>swing-toast-notifications</groupId>
+            <artifactId>swing-toast-notifications</artifactId>
+            <version>1.0.1</version>
         </dependency>
 
         <dependency>
             <groupId>swing-jnafilechooser</groupId>
             <artifactId>swing-jnafilechooser</artifactId>
-            <version>1.0-SNAPSHOT</version>
-            <scope>system</scope>
-            <systemPath>${basedir}/lib/swing-jnafilechooser.jar</systemPath>
+            <version>1.0</version>
         </dependency>
 
-        <dependency>
-            <groupId>swing-datetime-picker-1.1.3</groupId>
-            <artifactId>swing-datetime-picker-1.1.3</artifactId>
-            <version>1.0-SNAPSHOT</version>
-            <scope>system</scope>
-            <systemPath>${basedir}/lib/swing-datetime-picker-1.1.3.jar</systemPath>
-        </dependency>
-
-        <dependency>
-            <groupId>mssql-jdbc-12.4.2.jre11</groupId>
-            <artifactId>mssql-jdbc-12.4.2.jre11</artifactId>
-            <version>1.0-SNAPSHOT</version>
-            <scope>system</scope>
-            <systemPath>${basedir}/lib/mssql-jdbc-12.4.2.jre11.jar</systemPath>
-        </dependency>
-
-        <dependency>
-            <groupId>jna-5.5.0</groupId>
-            <artifactId>jna-5.5.0</artifactId>
-            <version>1.0-SNAPSHOT</version>
-            <scope>system</scope>
-            <systemPath>${basedir}/lib/jna-5.5.0.jar</systemPath>
-        </dependency>
-
-        <!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-api -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
             <version>2.0.17</version>
         </dependency>
 
-        <!-- https://mvnrepository.com/artifact/ch.qos.logback/logback-classic -->
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
@@ -105,7 +65,6 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- Force logback-core to use secure versions -->
             <dependency>
                 <groupId>ch.qos.logback</groupId>
                 <artifactId>logback-core</artifactId>
@@ -116,25 +75,85 @@
 
     <build>
         <plugins>
-            <!-- Maven Exec Plugin để chạy main class -->
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <version>3.1.0</version>
-                <configuration>
-                    <mainClass>application.Application</mainClass>
-                </configuration>
-            </plugin>
-            
-            <!-- Maven Compiler Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
+                <artifactId>maven-install-plugin</artifactId>
+                <version>3.1.1</version>
+                <executions>
+                    <execution>
+                        <id>install-swing-toast</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>install-file</goal>
+                        </goals>
+                        <configuration>
+                            <file>${project.basedir}/lib/swing-toast-notifications-1.0.1.jar</file>
+                            <groupId>swing-toast-notifications</groupId>
+                            <artifactId>swing-toast-notifications</artifactId>
+                            <version>1.0.1</version>
+                            <packaging>jar</packaging>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>install-jnafilechooser</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>install-file</goal>
+                        </goals>
+                        <configuration>
+                            <file>${project.basedir}/lib/swing-jnafilechooser.jar</file>
+                            <groupId>swing-jnafilechooser</groupId>
+                            <artifactId>swing-jnafilechooser</artifactId>
+                            <version>1.0</version>
+                            <packaging>jar</packaging>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
                 <configuration>
-                    <source>21</source>
-                    <target>21</target>
+                    <archive>
+                        <manifest>
+                            <mainClass>application.Application</mainClass>
+                        </manifest>
+                    </archive>
                 </configuration>
+            </plugin>
+
+            <!-- BƯỚC 3: Tạo fat JAR với tất cả dependencies -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>application.Application</mainClass>
+                                </transformer>
+                            </transformers>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
