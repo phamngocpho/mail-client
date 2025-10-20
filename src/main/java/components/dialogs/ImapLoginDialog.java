@@ -166,7 +166,7 @@ public class ImapLoginDialog extends JDialog {
     }
 
     /**
-     * Establishes a connection to the IMAP server and attempts to auto-configure SMTP settings.
+     * Establishes a connection to the IMAP server and attempts to autoconfigure SMTP settings.
      * <br>
      * The method retrieves user-provided host, email, and password input values,
      * validates these inputs, and triggers the connection process in a background thread

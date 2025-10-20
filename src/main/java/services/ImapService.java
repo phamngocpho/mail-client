@@ -7,9 +7,10 @@ import org.slf4j.LoggerFactory;
 import protocols.imap.ImapClient;
 import protocols.imap.ImapException;
 import protocols.imap.ImapParser;
+import utils.AsyncUtils;
+import utils.EmailUtils;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -78,27 +79,10 @@ public class ImapService {
             // Fetch tất cả emails
             List<Email> emails = client.fetchEmails(1, messageCount);
             
-            logger.debug("Fetched {} emails before filtering", emails.size());
+            logger.debug("{}", AsyncUtils.createFetchedEmailsLog(emails.size()));
 
-            // Lọc bỏ emails không hợp lệ (không có Subject hoặc From - chỉ có internal headers)
-            int beforeFilter = emails.size();
-            emails.removeIf(email -> {
-                boolean invalid = (email.getSubject() == null || email.getSubject().isEmpty()) && 
-                                  (email.getFrom() == null || email.getFrom().isEmpty());
-                if (invalid) {
-                    logger.debug("Filtering out invalid email - Subject: [{}], From: [{}]", 
-                        email.getSubject(), email.getFrom());
-                }
-                return invalid;
-            });
-            
-            int afterFilter = emails.size();
-            logger.info("Filtered {} invalid emails, remaining: {}", beforeFilter - afterFilter, afterFilter);
-
-            // Sort với nullsLast để xử lý emails không có Date
-            emails.sort(Comparator.comparing(Email::getDate, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
-
-            return emails;
+            // Sử dụng EmailUtils để filter và sort emails
+            return EmailUtils.processEmails(emails);
         } catch (ImapException e) {
             throw new ImapException("Failed to fetch folder '" + folderName + "': " + e.getMessage(), e);
         }
@@ -124,27 +108,10 @@ public class ImapService {
 
             List<Email> emails = client.fetchEmails(start, messageCount);
             
-            logger.debug("Fetched {} emails before filtering", emails.size());
+            logger.debug("{}", AsyncUtils.createFetchedEmailsLog(emails.size()));
 
-            // Lọc bỏ emails không hợp lệ (không có Subject hoặc From - chỉ có internal headers)
-            int beforeFilter = emails.size();
-            emails.removeIf(email -> {
-                boolean invalid = (email.getSubject() == null || email.getSubject().isEmpty()) && 
-                                  (email.getFrom() == null || email.getFrom().isEmpty());
-                if (invalid) {
-                    logger.debug("Filtering out invalid email - Subject: [{}], From: [{}]", 
-                        email.getSubject(), email.getFrom());
-                }
-                return invalid;
-            });
-            
-            int afterFilter = emails.size();
-            logger.info("Filtered {} invalid emails, remaining: {}", beforeFilter - afterFilter, afterFilter);
-
-            // Sort với nullsLast để xử lý emails không có Date
-            emails.sort(Comparator.comparing(Email::getDate, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
-
-            return emails;
+            // Sử dụng EmailUtils để filter và sort emails
+            return EmailUtils.processEmails(emails);
         } catch (ImapException e) {
             throw new ImapException("Failed to fetch recent emails: " + e.getMessage(), e);
         }

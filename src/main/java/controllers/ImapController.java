@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import protocols.imap.ImapParser;
 import raven.toast.Notifications;
 import services.ImapService;
+import utils.AsyncUtils;
 import utils.Constants;
 
 import javax.swing.*;
@@ -138,7 +139,7 @@ public class ImapController {
                     List<Email> emails = get();
                     notifyAllInboxes(emails, currentFolder);
                 } catch (Exception e) {
-                    showError("Failed to connect: " + e.getMessage());
+                    AsyncUtils.showError("connect", e);
                 }
             }
         };
@@ -175,7 +176,7 @@ public class ImapController {
                     cacheEmails(folderName, emails); // Lưu vào cache
                     notifyAllInboxes(emails, folderName);
                 } catch (Exception e) {
-                    showError("Failed to load emails: " + e.getMessage());
+                    AsyncUtils.showError("load emails", e);
                 }
             }
         };
@@ -205,7 +206,7 @@ public class ImapController {
                     cacheEmails(currentFolder, emails); // Lưu lại cache mới
                     notifyAllInboxes(emails, currentFolder);
                 } catch (Exception e) {
-                    showError("Failed to refresh: " + e.getMessage());
+                    AsyncUtils.showError("refresh", e);
                 }
             }
         };
@@ -217,83 +218,69 @@ public class ImapController {
      * Update email flags on server
      */
     public void updateEmailFlags(Email email) {
-        SwingWorker<Void, Void> worker = new SwingWorker<>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                // Lấy flags từ email object
-                List<String> flagsToAdd = new ArrayList<>();
-                List<String> flagsToRemove = new ArrayList<>();
-
-                // Check which flags changed
-                if (email.hasFlag("Flagged")) {
-                    flagsToAdd.add("\\Flagged");
-                } else {
-                    flagsToRemove.add("\\Flagged");
-                }
-
-                if (email.hasFlag("Seen")) {
-                    flagsToAdd.add("\\Seen");
-                } else {
-                    flagsToRemove.add("\\Seen");
-                }
-
-                // Update trên server
-                if (!flagsToAdd.isEmpty()) {
-                    imapService.updateFlags(currentFolder, email.getMessageNumber(), flagsToAdd, true);
-                }
-                if (!flagsToRemove.isEmpty()) {
-                    imapService.updateFlags(currentFolder, email.getMessageNumber(), flagsToRemove, false);
-                }
-
-                return null;
-            }
-
-            @Override
-            protected void done() {
+        AsyncUtils.executeVoidAsync(
+            () -> {
                 try {
-                    get();
-                    logger.info("Flags synced with server");
-                    refresh();
-                } catch (Exception e) {
-                    showError("Failed to update flags: " + e.getMessage());
-                    logger.error("Failed to update flags: {}", e.getMessage());
-                }
-            }
-        };
+                    // Lấy flags từ email object
+                    List<String> flagsToAdd = new ArrayList<>();
+                    List<String> flagsToRemove = new ArrayList<>();
 
-        worker.execute();
+                    // Check which flags changed
+                    if (email.hasFlag("Flagged")) {
+                        flagsToAdd.add("\\Flagged");
+                    } else {
+                        flagsToRemove.add("\\Flagged");
+                    }
+
+                    if (email.hasFlag("Seen")) {
+                        flagsToAdd.add("\\Seen");
+                    } else {
+                        flagsToRemove.add("\\Seen");
+                    }
+
+                    // Update trên server
+                    if (!flagsToAdd.isEmpty()) {
+                        imapService.updateFlags(currentFolder, email.getMessageNumber(), flagsToAdd, true);
+                    }
+                    if (!flagsToRemove.isEmpty()) {
+                        imapService.updateFlags(currentFolder, email.getMessageNumber(), flagsToRemove, false);
+                    }
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            },
+            () -> {
+                logger.info("Flags synced with server");
+                refresh();
+            },
+            e -> AsyncUtils.showError("update flags", e)
+        );
     }
 
     /**
      * Mark email as read/unread
      */
     public void markAsRead(Email email, boolean read) {
-        SwingWorker<Void, Void> worker = new SwingWorker<>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                imapService.markAsRead(currentFolder, email.getMessageNumber(), read);
-                return null;
-            }
-
-            @Override
-            protected void done() {
+        AsyncUtils.executeVoidAsync(
+            () -> {
                 try {
-                    get();
-                    // Update local email object
-                    if (read) {
-                        email.addFlag("Seen");
-                    } else {
-                        email.removeFlag("Seen");
-                    }
-                    // Refresh UI
-                    inboxPanel.refreshEmailRow(email);
+                    imapService.markAsRead(currentFolder, email.getMessageNumber(), read);
                 } catch (Exception e) {
-                    showError("Failed to mark as read: " + e.getMessage());
+                    throw new RuntimeException(e);
                 }
-            }
-        };
-
-        worker.execute();
+            },
+            () -> {
+                // Update local email object
+                if (read) {
+                    email.addFlag("Seen");
+                } else {
+                    email.removeFlag("Seen");
+                }
+                // Refresh UI
+                inboxPanel.refreshEmailRow(email);
+            },
+            e -> AsyncUtils.showError("mark as read", e)
+        );
     }
 
     /**
@@ -312,110 +299,94 @@ public class ImapController {
             return;
         }
 
-        SwingWorker<Void, Void> worker = new SwingWorker<>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                imapService.deleteEmail(currentFolder, email.getMessageNumber());
-                return null;
-            }
-
-            @Override
-            protected void done() {
+        AsyncUtils.executeVoidAsync(
+            () -> {
                 try {
-                    get();
-                    // Refresh to remove from the list
-                    refresh();
-                    Notifications.getInstance().show(Notifications.Type.SUCCESS, "Email deleted");
+                    imapService.deleteEmail(currentFolder, email.getMessageNumber());
                 } catch (Exception e) {
-                    showError("Failed to delete email: " + e.getMessage());
+                    throw new RuntimeException(e);
                 }
-            }
-        };
-
-        worker.execute();
+            },
+            () -> {
+                // Refresh to remove from the list
+                refresh();
+                Notifications.getInstance().show(Notifications.Type.SUCCESS, "Email deleted");
+            },
+            e -> AsyncUtils.showError("delete email", e)
+        );
     }
 
     /**
      * Load email body khi user click vào email
      */
     public void loadEmailBody(Email email, String folderName) {
-        SwingWorker<ImapParser.EmailBody, Void> worker = new SwingWorker<>() {
-            @Override
-            protected ImapParser.EmailBody doInBackground() throws Exception {
-                return imapService.fetchEmailBody(folderName, email.getMessageNumber());
-            }
-
-            @Override
-            protected void done() {
+        AsyncUtils.executeAsync(
+            () -> {
                 try {
-                    ImapParser.EmailBody emailBody = get();
-                    email.setBody(emailBody.plainText);
-                    email.setBodyHtml(emailBody.html);
-                    email.setHtml(!emailBody.html.isEmpty());
+                    return imapService.fetchEmailBody(folderName, email.getMessageNumber());
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            },
+            emailBody -> {
+                email.setBody(emailBody.plainText);
+                email.setBodyHtml(emailBody.html);
+                email.setHtml(!emailBody.html.isEmpty());
 
-                    logger.debug("Email body loaded. Attachments count: {}", emailBody.attachments.size());
-                    logger.debug("Email body loaded. Attachments count: {}", emailBody.attachments.size());
-                    logger.debug("Plain text preview (first 200 chars): {}",
-                            emailBody.plainText.substring(0, Math.min(200, emailBody.plainText.length())));
-                    logger.debug("HTML preview (first 200 chars): {}",
-                            emailBody.html.substring(0, Math.min(200, emailBody.html.length())));
+                logger.debug("Email body loaded. Attachments count: {}", emailBody.attachments.size());
+                logger.debug("Plain text preview: {}", AsyncUtils.createPreview(emailBody.plainText));
+                logger.debug("HTML preview: {}", AsyncUtils.createPreview(emailBody.html));
 
-                    // Tạo thư mục attachments trong project nếu chưa tồn tại
-                    File attachmentDir = new File("attachments");
-                    if (!attachmentDir.exists()) {
-                        if (!attachmentDir.mkdirs()) {
-                            logger.warn("Failed to create directory: {}", attachmentDir.getAbsolutePath());
-                            Notifications.getInstance().show(Notifications.Type.WARNING, "Failed to create directory for attachments");
-                        }
+                // Tạo thư mục attachments trong project nếu chưa tồn tại
+                File attachmentDir = new File("attachments");
+                if (!attachmentDir.exists()) {
+                    if (!attachmentDir.mkdirs()) {
+                        logger.warn("Failed to create directory: {}", attachmentDir.getAbsolutePath());
+                        Notifications.getInstance().show(Notifications.Type.WARNING, "Failed to create directory for attachments");
                     }
+                }
 
-                    for (ImapParser.Attachment att : emailBody.attachments) {
-                        try {
-                            String decodedFilename = ImapParser.decodeFilename(att.filename);
-                            String safeFilename = sanitizeFilename(decodedFilename);
+                for (ImapParser.Attachment att : emailBody.attachments) {
+                    try {
+                        String decodedFilename = ImapParser.decodeFilename(att.filename);
+                        String safeFilename = sanitizeFilename(decodedFilename);
 
-                            logger.debug("Original: {} → Decoded: {} → Safe: {}",
-                                    att.filename, decodedFilename, safeFilename);
+                        logger.debug("Original: {} → Decoded: {} → Safe: {}",
+                                att.filename, decodedFilename, safeFilename);
 
-                            File attachmentFile = new File(attachmentDir, safeFilename);
+                        File attachmentFile = new File(attachmentDir, safeFilename);
 
-                            // Chỉ ghi file nếu chưa tồn tại
-                            if (!attachmentFile.exists()) {
-                                // Đảm bảo tên file unique nếu cần
-                                attachmentFile = getAttachmentFile(attachmentDir, safeFilename);
+                        // Chỉ ghi file nếu chưa tồn tại
+                        if (!attachmentFile.exists()) {
+                            // Đảm bảo tên file unique nếu cần
+                            attachmentFile = getAttachmentFile(attachmentDir, safeFilename);
 
-                                try (FileOutputStream fos = new FileOutputStream(attachmentFile)) {
-                                    fos.write(att.data);
-                                }
-
-                                logger.debug("Saved NEW attachment: {} ({} bytes) to: {}",
-                                        safeFilename, att.data.length, attachmentFile.getAbsolutePath());
-                            } else {
-                                logger.debug("Attachment ALREADY EXISTS, reusing: {}", attachmentFile.getAbsolutePath());
+                            try (FileOutputStream fos = new FileOutputStream(attachmentFile)) {
+                                fos.write(att.data);
                             }
 
-                            email.addAttachment(attachmentFile);
-
-                        } catch (Exception e) {
-                            logger.error("Failed to save attachment: {}", att.filename, e);
+                            logger.debug("Saved NEW attachment: {} ({} bytes) to: {}",
+                                    safeFilename, att.data.length, attachmentFile.getAbsolutePath());
+                        } else {
+                            logger.debug("Attachment ALREADY EXISTS, reusing: {}", attachmentFile.getAbsolutePath());
                         }
+
+                        email.addAttachment(attachmentFile);
+
+                    } catch (Exception e) {
+                        logger.error("Failed to save attachment: {}", att.filename, e);
                     }
-
-                    logger.debug("Total attachments added to email: {}", email.getAttachments().size());
-
-                    // Update body cho tất cả inbox đang hiển thị email này
-                    for (Inbox inbox : registeredInboxes) {
-                        SwingUtilities.invokeLater(() -> inbox.updateEmailBody(email));
-                    }
-
-                } catch (Exception e) {
-                    showError("Failed to load email body: " + e.getMessage());
-                    logger.error("Error loading email body", e);
                 }
-            }
-        };
 
-        worker.execute();
+                logger.debug("Total attachments added to email: {}", email.getAttachments().size());
+
+                // Update body cho tất cả inbox đang hiển thị email này
+                for (Inbox inbox : registeredInboxes) {
+                    SwingUtilities.invokeLater(() -> inbox.updateEmailBody(email));
+                }
+            },
+            e -> AsyncUtils.showError("load email body", e)
+        );
     }
 
     /**
@@ -499,21 +470,5 @@ public class ImapController {
         return imapService.isConnected();
     }
 
-    /**
-     * Show error dialog
-     */
-    private void showError(String message) {
-        Notifications.getInstance().show(Notifications.Type.ERROR, message);
-    }
 
-    /**
-     * Update inbox panel with emails và log thông tin
-     * Method chung để tránh duplicate code
-     */
-    private void updateInboxWithEmails(List<Email> emails) {
-        SwingUtilities.invokeLater(() -> {
-            notifyAllInboxes(emails, currentFolder);
-            logger.info("Connected successfully! Loaded {} emails", emails.size());
-        });
-    }
 }

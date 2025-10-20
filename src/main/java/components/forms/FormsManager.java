@@ -11,7 +11,7 @@ import java.awt.*;
  * initialization of forms in the application. It provides functionality to
  * initialize the main application frame and dynamically update its content pane
  * to show different forms.
- *
+ * <p>
  * This class follows a singleton pattern to ensure only one global instance
  * is used throughout the application.
  */

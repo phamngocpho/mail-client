@@ -3,6 +3,7 @@ package protocols.imap;
 import models.Email;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import utils.AsyncUtils;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -108,12 +109,7 @@ public class ImapParser {
         String headers = response.substring(headerStart + 2, headerEnd);
         
         // Debug log để kiểm tra header extraction
-        logger.debug("Extracted headers length: {} chars", headers.length());
-        if (headers.length() > 500) {
-            logger.debug("Headers preview (first 500 chars): {}", headers.substring(0, 500));
-        } else {
-            logger.debug("Full headers: {}", headers);
-        }
+        logger.debug("Extracted {}", AsyncUtils.createDetailedLog(headers, "headers", 500));
         
         // Check if Subject is truncated
         int subjectIdx = headers.indexOf("Subject:");
@@ -199,7 +195,7 @@ public class ImapParser {
             case "SUBJECT":
                 logger.debug("=== SUBJECT PROCESSING ===");
                 logger.debug("Raw subject value: [{}]", value);
-                logger.debug("Raw subject length: {} chars", value.length());
+                logger.debug("Raw {}", AsyncUtils.createLengthLog(value, "subject"));
                 String decodedSubject = decodeSubject(value);
                 logger.debug("Decoded subject: [{}]", decodedSubject);
                 email.setSubject(decodedSubject);
@@ -241,7 +237,7 @@ public class ImapParser {
         try {
             logger.debug("Original subject: {}", subject);
             
-            // Step 1: First, collapse multiple whitespace to single space
+            // Step 1: First, collapse multiple whitespace to a single space
             String normalized = subject.replaceAll("\\s+", " ").trim();
             
             // Step 2: Fix malformed encoded-words by removing spaces within =?...?= blocks
@@ -252,14 +248,14 @@ public class ImapParser {
             // Remove spaces around encoding: ? B ? → ?B?
             normalized = normalized.replaceAll("\\?\\s+([BQbq])\\s+\\?", "?$1?");
             
-            // Step 3: Remove spaces WITHIN charset portion (e.g., "=?U TF-8?B?" → "=?UTF-8?B?")
-            // This handles cases where charset is split: =?UTF- 8?B? or =?U TF-8?B?
+            // Step 3: Remove spaces WITHIN the charset portion (e.g., "=?U TF-8?B?" → "=?UTF-8?B?")
+            // This handles cases where the charset is split: =?UTF- 8?B? or =?U TF-8?B?
             // Apply multiple times to handle multiple-word charsets
             Pattern charsetFixPattern = Pattern.compile("=\\?([A-Za-z0-9\\-]+)\\s+([A-Za-z0-9\\-]+)\\?([BQbq])\\?");
             int maxIterations = 5; // Prevent infinite loops
             for (int i = 0; i < maxIterations; i++) {
                 Matcher charsetMatcher = charsetFixPattern.matcher(normalized);
-                StringBuffer sb = new StringBuffer();
+                StringBuilder sb = new StringBuilder();
                 boolean found = false;
                 while (charsetMatcher.find()) {
                     found = true;
@@ -291,29 +287,17 @@ public class ImapParser {
             while (matcher.find()) {
                 hasMatch = true;
                 // Add any text before this match
-                result.append(normalized.substring(lastEnd, matcher.start()));
+                result.append(normalized, lastEnd, matcher.start());
 
                 String charset = matcher.group(1).trim();
                 String encoding = matcher.group(2).toUpperCase();
                 String encodedText = matcher.group(3).trim();
 
-                logger.debug("Decoding: charset={}, encoding={}, text length={}", 
-                        charset, encoding, encodedText.length());
+                logger.debug("Decoding: charset={}, encoding={}, {}", 
+                        charset, encoding, AsyncUtils.createLengthLog(encodedText, "text"));
 
                 try {
-                    String decoded;
-                    if ("B".equals(encoding)) {
-                        // Base64 decode
-                        // Remove any remaining whitespace from encoded text
-                        encodedText = encodedText.replaceAll("\\s+", "");
-                        byte[] decodedBytes = Base64.getDecoder().decode(encodedText);
-                        decoded = new String(decodedBytes, charset);
-                    } else {
-                        // Quoted-Printable decode
-                        // In Q encoding, underscore represents space
-                        encodedText = encodedText.replace("_", " ");
-                        decoded = decodeQuotedPrintable(encodedText);
-                    }
+                    String decoded = AsyncUtils.decodeEncodedText(encodedText, encoding, charset);
                     result.append(decoded);
                     logger.debug("Successfully decoded to: {}", decoded);
                 } catch (Exception e) {
@@ -333,7 +317,7 @@ public class ImapParser {
             
             String finalResult = result.toString().trim();
             
-            // If no match was found and subject looks like it might be encoded, try a more lenient pattern
+            // If no match was found and the subject looks like it might be encoded, try a more lenient pattern
             if (!hasMatch && subject.contains("=?")) {
                 logger.warn("Subject appears to be encoded but standard pattern didn't match: {}", normalized);
                 logger.warn("Attempting lenient decoding...");
@@ -349,25 +333,17 @@ public class ImapParser {
                 
                 while (lenientMatcher.find()) {
                     lenientMatch = true;
-                    lenientResult.append(normalized.substring(lenientLastEnd, lenientMatcher.start()));
+                    lenientResult.append(normalized, lenientLastEnd, lenientMatcher.start());
                     
-                    String charset = lenientMatcher.group(1).replaceAll("\\s+", ""); // Remove all spaces from charset
+                    String charset = lenientMatcher.group(1).replaceAll("\\s+", ""); // Remove all spaces from the charset
                     String encoding = lenientMatcher.group(2).toUpperCase();
                     String encodedText = lenientMatcher.group(3).trim();
                     
-                    logger.debug("Lenient decoding: charset={}, encoding={}, text length={}", 
-                            charset, encoding, encodedText.length());
+                    logger.debug("Lenient decoding: charset={}, encoding={}, {}", 
+                            charset, encoding, AsyncUtils.createLengthLog(encodedText, "text"));
                     
                     try {
-                        String decoded;
-                        if ("B".equals(encoding)) {
-                            encodedText = encodedText.replaceAll("\\s+", "");
-                            byte[] decodedBytes = Base64.getDecoder().decode(encodedText);
-                            decoded = new String(decodedBytes, charset);
-                        } else {
-                            encodedText = encodedText.replace("_", " ");
-                            decoded = decodeQuotedPrintable(encodedText);
-                        }
+                        String decoded = AsyncUtils.decodeEncodedText(encodedText, encoding, charset);
                         lenientResult.append(decoded);
                         logger.debug("Lenient decode successful: {}", decoded);
                     } catch (Exception e) {
@@ -385,7 +361,7 @@ public class ImapParser {
                     return lenientFinal;
                 }
                 
-                // If even lenient pattern fails, return normalized version (not original)
+                // If even a lenient pattern fails, return a normalized version (not original)
                 logger.warn("Both standard and lenient patterns failed, returning normalized subject");
                 return normalized;
             }
@@ -579,22 +555,19 @@ public class ImapParser {
             if (headers.toLowerCase().contains("content-type: text/plain") ||
                     headers.toLowerCase().contains("content-type:text/plain")) {
                 logger.debug("Found text/plain part");
-                logger.debug("Encoding: {}, Charset: {}", encoding, charset);
-                logger.debug("Raw content preview (200 chars): {}",
-                        partContent.substring(0, Math.min(200, partContent.length())));
+                logger.debug("{}", AsyncUtils.createEncodingLog(encoding, charset));
+                logger.debug("Raw content preview: {}", AsyncUtils.createPreview(partContent));
 
                 body.plainText = decodeContent(partContent.trim(), encoding, charset);
 
-                logger.debug("Decoded plain text ({} chars)", body.plainText.length());
-                logger.debug("Decoded preview (200 chars): {}",
-                        body.plainText.substring(0, Math.min(200, body.plainText.length())));
+                logger.debug("{}", AsyncUtils.createDecodedLog(body.plainText, "plain text"));
             }
 
             // Parse text/html
             if (headers.toLowerCase().contains("content-type: text/html") ||
                     headers.toLowerCase().contains("content-type:text/html")) {
                 body.html = decodeContent(partContent.trim(), encoding, charset);
-                logger.debug("Extracted HTML ({} chars) with charset: {}", body.html.length(), charset);
+                logger.debug("Extracted {} with charset: {}", AsyncUtils.createLengthLog(body.html, "HTML"), charset);
             }
         }
     }
@@ -628,11 +601,9 @@ public class ImapParser {
         String charset = extractCharsetFromHeaders(headers);
         String encoding = extractEncodingFromHeaders(headers);
 
-        logger.debug("Headers preview (300 chars): {}",
-                headers.substring(0, Math.min(300, headers.length())));
+        logger.debug("Headers: {}", AsyncUtils.createDetailedLog(headers, "headers", 300));
         logger.debug("Detected charset: {}, encoding: {}", charset, encoding);
-        logger.debug("Content preview (200 chars): {}",
-                content.substring(0, Math.min(200, content.length())));
+        logger.debug("{}", AsyncUtils.createContentLog(content));
 
         return decodeContent(content, encoding, charset);
     }
@@ -748,7 +719,7 @@ public class ImapParser {
 
                     byte[] data = decodeAttachmentData(content, encoding);
 
-                    logger.debug("Decoded data length: {}", data.length);
+                    logger.debug("{}", AsyncUtils.createDataLengthLog(data, "Decoded data"));
 
                     attachments.add(new Attachment(filename, contentType, data));
                 }
@@ -834,11 +805,10 @@ public class ImapParser {
             // Normalize charset name
             charset = normalizeCharset(charset);
 
-            logger.debug("Encoding: {}, Charset: {}", encoding, charset);
-            logger.debug("Content length: {} bytes", content.length());
-            logger.debug("Content preview (100 chars): {}", content.substring(0, Math.min(100, content.length())));
+            logger.debug("{}", AsyncUtils.createEncodingLog(encoding, charset));
+            logger.debug("{}", AsyncUtils.createContentLog(content, 100));
 
-            // Auto-detect quoted-printable if encoding header is missing/wrong but content looks like QP
+            // Auto-detect quoted-printable if the encoding header is missing/wrong but content looks like QP
             if (!encoding.equalsIgnoreCase("quoted-printable") && 
                 !encoding.equalsIgnoreCase("base64") &&
                 content.matches("(?s).*=[0-9A-Fa-f]{2}.*")) {
@@ -861,9 +831,9 @@ public class ImapParser {
                     break;
 
                 case "quoted-printable":
-                    logger.debug("Before QP decode: {}", content.substring(0, Math.min(100, content.length())));
+                    logger.debug("Before QP decode: {}", AsyncUtils.createPreview(content, 100));
                     String decoded = decodeQuotedPrintable(content);
-                    logger.debug("After QP decode: {}", decoded.substring(0, Math.min(100, decoded.length())));
+                    logger.debug("After QP decode: {}", AsyncUtils.createPreview(decoded, 100));
                     return decoded;
 
                 case "7bit":
@@ -994,7 +964,7 @@ public class ImapParser {
     private static String decodeQuotedPrintable(String qp) {
         if (qp == null) return "";
 
-        logger.debug("QP Input preview (200 chars): [{}]", qp.substring(0, Math.min(200, qp.length())));
+        logger.debug("QP Input preview: [{}]", AsyncUtils.createPreview(qp));
 
         // Fix soft breaks: Remove = + optional spaces + \r?\n + optional spaces (không thêm space mới)
         qp = qp.replaceAll("=\\s*\\r?\\n\\s*", "");  // → "notice d" thành "noticed"
@@ -1040,7 +1010,7 @@ public class ImapParser {
             // Final clean: Loại multiple spaces/newlines, trim edges
             result = result.replaceAll("\\s+", " ").trim();
 
-            logger.debug("QP Output preview (200 chars): [{}]", result.substring(0, Math.min(200, result.length())));
+            logger.debug("QP Output preview: [{}]", AsyncUtils.createPreview(result));
 
             return result;
         } catch (Exception e) {
