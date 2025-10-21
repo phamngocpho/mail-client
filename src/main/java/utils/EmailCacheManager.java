@@ -160,6 +160,7 @@ public class EmailCacheManager {
     
     /**
      * Lấy attachments từ cache (trả về List<File>)
+     * KHÔNG filter file không tồn tại - để caller tự check
      */
     public List<File> getAttachments(int messageNumber) {
         List<String> paths = attachmentsCache.get(messageNumber);
@@ -167,14 +168,17 @@ public class EmailCacheManager {
         
         List<File> files = new ArrayList<>();
         for (String path : paths) {
-            File file = new File(path);
-            if (file.exists()) {
-                files.add(file);
-            } else {
-                logger.warn("Cached attachment file not found: {}", path);
-            }
+            files.add(new File(path));
         }
         return files;
+    }
+    
+    /**
+     * Kiểm tra xem có attachments cached không
+     */
+    public boolean hasAttachments(int messageNumber) {
+        List<String> paths = attachmentsCache.get(messageNumber);
+        return paths != null && !paths.isEmpty();
     }
     
     /**

@@ -188,6 +188,10 @@ public class Email {
     public void setAttachments(List<File> attachments) {
         this.attachments = attachments;
     }
+    
+    public void clearAttachments() {
+        this.attachments.clear();
+    }
 
 
     @Override

@@ -6,6 +6,9 @@ import components.dialogs.ImapLoginDialog;
 import controllers.ImapController;
 import net.miginfocom.swing.MigLayout;
 import models.Email;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import protocols.imap.ImapParser;
 import raven.toast.Notifications;
 import utils.Constants;
 
@@ -68,6 +71,8 @@ import static utils.UIUtils.getFileIcon;
  * - openAttachment(File file): Opens a given attachment file using the default application.
  */
 public class Inbox extends JPanel {
+    private static final Logger logger = LoggerFactory.getLogger(Inbox.class);
+    
     private JTable emailTable;
     private DefaultTableModel tableModel;
     private JLabel fromLabel, subjectLabel, dateLabel;
@@ -538,7 +543,9 @@ public class Inbox extends JPanel {
                 controller.loadEmailBody(email, folderName);
             }
         } else {
-            bodyTextArea.setText(email.getBody());
+            // Decode HTML entities trong plain text (vd: &#8202; → khoảng trắng)
+            String displayBody = ImapParser.decodeHtmlEntities(email.getBody());
+            bodyTextArea.setText(displayBody);
             bodyTextArea.setCaretPosition(0);
         }
 
@@ -575,13 +582,44 @@ public class Inbox extends JPanel {
         if (selectedRow >= 0 && selectedRow < emails.size()) {
             Email selectedEmail = emails.get(selectedRow);
             if (selectedEmail.getMessageNumber() == email.getMessageNumber()) {
-                // Update body text
-                bodyTextArea.setText(email.getBody() != null ? email.getBody() : "(No content)");
+                // Update body text - Decode HTML entities
+                String displayBody = email.getBody() != null ? 
+                        ImapParser.decodeHtmlEntities(email.getBody()) : "(No content)";
+                bodyTextArea.setText(displayBody);
                 bodyTextArea.setCaretPosition(0);
 
                 populateAttachmentsPanel(email.getAttachments());
             }
         }
+    }
+    
+    /**
+     * Update email body CHỈ KHI email đó vẫn đang được chọn
+     * Tránh race condition khi user click nhanh
+     */
+    public void updateEmailBodyIfCurrent(Email email) {
+        int selectedRow = emailTable.getSelectedRow();
+        if (selectedRow < 0 || selectedRow >= emails.size()) {
+            logger.debug("Email #{} loaded but no row selected, skipping UI update", email.getMessageNumber());
+            return;
+        }
+        
+        Email currentEmail = emails.get(selectedRow);
+        if (currentEmail.getMessageNumber() != email.getMessageNumber()) {
+            logger.debug("Email #{} loaded but user switched to email #{}, skipping UI update", 
+                        email.getMessageNumber(), currentEmail.getMessageNumber());
+            return;
+        }
+        
+        // Email vẫn được chọn, update UI
+        logger.debug("Updating UI for email #{} (still selected)", email.getMessageNumber());
+        
+        // Decode HTML entities trong plain text
+        String displayBody = email.getBody() != null ? 
+                ImapParser.decodeHtmlEntities(email.getBody()) : "(No content)";
+        bodyTextArea.setText(displayBody);
+        bodyTextArea.setCaretPosition(0);
+        populateAttachmentsPanel(email.getAttachments());
     }
 
     /**

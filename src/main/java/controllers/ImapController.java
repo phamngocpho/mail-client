@@ -14,6 +14,8 @@ import utils.EmailCacheManager;
 import javax.swing.*;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -335,28 +337,69 @@ public class ImapController {
         // Kiểm tra cache trước (từ disk)
         if (cacheManager.hasBody(msgNum)) {
             logger.info("Using cached body from disk for message #{}", msgNum);
-            email.setBody(cacheManager.getBody(msgNum));
-            email.setBodyHtml(cacheManager.getBodyHtml(msgNum));
-            email.setHtml(cacheManager.getBodyHtml(msgNum) != null && !cacheManager.getBodyHtml(msgNum).isEmpty());
             
             // Restore attachments từ cache
             List<File> cachedAttachments = cacheManager.getAttachments(msgNum);
-            if (cachedAttachments != null) {
+            boolean allAttachmentsExist = true;
+            
+            logger.debug("Checking cached attachments for message #{}: {} files", 
+                        msgNum, cachedAttachments != null ? cachedAttachments.size() : 0);
+            
+            // Check xem tất cả attachments có tồn tại không
+            if (cachedAttachments != null && !cachedAttachments.isEmpty()) {
+                int existCount = 0;
+                int missingCount = 0;
                 for (File file : cachedAttachments) {
-                    email.addAttachment(file);
+                    if (!file.exists()) {
+                        logger.warn("Cached attachment file MISSING: {}", file.getAbsolutePath());
+                        allAttachmentsExist = false;
+                        missingCount++;
+                    } else {
+                        logger.debug("Cached attachment file EXISTS: {}", file.getName());
+                        existCount++;
+                    }
                 }
-                logger.debug("Restored {} attachments from disk cache", cachedAttachments.size());
+                logger.info("Attachment check for message #{}: {} exist, {} missing", msgNum, existCount, missingCount);
             }
             
-            // Update UI
-            for (Inbox inbox : registeredInboxes) {
-                SwingUtilities.invokeLater(() -> inbox.updateEmailBody(email));
+            // Nếu có attachment bị mất, invalidate cache và fetch lại
+            if (!allAttachmentsExist && cachedAttachments != null && !cachedAttachments.isEmpty()) {
+                logger.warn("⚠️ Some attachments missing, invalidating cache and re-fetching message #{}", msgNum);
+                cacheManager.clearMessage(msgNum);
+                // Không return, sẽ fetch từ server ở dưới
+            } else {
+                // Cache hợp lệ, restore body và attachments
+                email.setBody(cacheManager.getBody(msgNum));
+                email.setBodyHtml(cacheManager.getBodyHtml(msgNum));
+                email.setHtml(cacheManager.getBodyHtml(msgNum) != null && !cacheManager.getBodyHtml(msgNum).isEmpty());
+                
+                // Clear attachments cũ trước khi restore
+                email.clearAttachments();
+                
+                if (cachedAttachments != null) {
+                    for (File file : cachedAttachments) {
+                        email.addAttachment(file);
+                    }
+                    logger.debug("Restored {} attachments from disk cache", cachedAttachments.size());
+                }
+                
+                // Update UI - validate email vẫn được chọn
+                for (Inbox inbox : registeredInboxes) {
+                    SwingUtilities.invokeLater(() -> {
+                        // Chỉ update nếu email này vẫn đang được hiển thị
+                        inbox.updateEmailBodyIfCurrent(email);
+                    });
+                }
+                return;
             }
-            return;
         }
         
         // Nếu không có cache, fetch từ server
         logger.info("Fetching body from server for message #{}", msgNum);
+        
+        // Clear attachments trước khi fetch
+        email.clearAttachments();
+        
         AsyncUtils.executeAsync(
             () -> {
                 try {
@@ -377,11 +420,30 @@ public class ImapController {
                 logger.debug("Plain text preview: {}", AsyncUtils.createPreview(emailBody.plainText));
                 logger.debug("HTML preview: {}", AsyncUtils.createPreview(emailBody.html));
 
-                // Tạo thư mục attachments trong project root
-                // Lấy thư mục hiện tại và tìm thư mục Mail Client
-                File currentDir = new File(System.getProperty("user.dir"));
-                File projectRoot = currentDir.getName().equals("Mail Client") ? currentDir : new File(currentDir, "Mail Client");
-                File attachmentDir = new File(projectRoot, "attachments");
+                // Tạo thư mục attachments trong cache directory để đồng nhất với cache
+                // Lấy đường dẫn từ location của class file
+                File attachmentDir;
+                try {
+                    Path classPath = Paths.get(ImapController.class.getProtectionDomain()
+                            .getCodeSource().getLocation().toURI());
+                    
+                    Path baseDir;
+                    if (classPath.toString().contains("target" + File.separator + "classes")) {
+                        baseDir = classPath.getParent().getParent();
+                    } else if (classPath.toString().endsWith(".jar")) {
+                        baseDir = classPath.getParent();
+                    } else {
+                        baseDir = Paths.get(System.getProperty("user.dir"), "Mail Client");
+                    }
+                    
+                    attachmentDir = baseDir.resolve(".mailclient/cache/attachments").toFile();
+                } catch (Exception e) {
+                    logger.error("Error determining attachment directory: {}", e.getMessage());
+                    // Fallback to old location
+                    File currentDir = new File(System.getProperty("user.dir"));
+                    File projectRoot = currentDir.getName().equals("Mail Client") ? currentDir : new File(currentDir, "Mail Client");
+                    attachmentDir = new File(projectRoot, "attachments");
+                }
                 
                 if (!attachmentDir.exists()) {
                     if (!attachmentDir.mkdirs()) {
@@ -433,8 +495,9 @@ public class ImapController {
                 logger.debug("Cached body and {} attachments to disk for message #{}", email.getAttachments().size(), msgNum);
 
                 // Update body cho tất cả inbox đang hiển thị email này
+                // CHỈ update nếu email vẫn đang được chọn
                 for (Inbox inbox : registeredInboxes) {
-                    SwingUtilities.invokeLater(() -> inbox.updateEmailBody(email));
+                    SwingUtilities.invokeLater(() -> inbox.updateEmailBodyIfCurrent(email));
                 }
             },
             e -> AsyncUtils.showError("load email body", e)

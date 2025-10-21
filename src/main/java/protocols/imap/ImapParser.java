@@ -802,6 +802,11 @@ public class ImapParser {
         if (content == null || content.isEmpty()) return "";
 
         try {
+            // Clean up IMAP artifacts ngay từ đầu
+            content = content.trim();
+            // Remove literal markers {123} ở đầu (nếu có)
+            content = content.replaceAll("^\\{\\d+}\\s*", "");
+            
             // Normalize charset name
             charset = normalizeCharset(charset);
 
@@ -965,6 +970,11 @@ public class ImapParser {
         if (qp == null) return "";
 
         logger.debug("QP Input preview: [{}]", AsyncUtils.createPreview(qp));
+        
+        // Clean up artifact pattern: số đơn lẻ + nhiều spaces/newlines + =
+        // Pattern: "96           =\n     =20" → artifact cần xóa
+        // Không xóa: "96 people" hoặc "2024 is" (nội dung thật)
+        qp = qp.replaceAll("^\\d{1,4}\\s{5,}=", "=");
 
         // Fix soft breaks: Remove = + optional spaces + \r?\n + optional spaces (không thêm space mới)
         qp = qp.replaceAll("=\\s*\\r?\\n\\s*", "");  // → "notice d" thành "noticed"
@@ -1007,6 +1017,11 @@ public class ImapParser {
         try {
             String result = baos.toString(StandardCharsets.UTF_8);
 
+            // Remove trailing `=` (soft line break không hoàn chỉnh ở cuối)
+            while (result.endsWith("=")) {
+                result = result.substring(0, result.length() - 1).trim();
+            }
+            
             // Final clean: Loại multiple spaces/newlines, trim edges
             result = result.replaceAll("\\s+", " ").trim();
 
@@ -1041,7 +1056,7 @@ public class ImapParser {
      *             If {@code null}, an empty string is returned.
      * @return a string with all HTML entities decoded into their corresponding characters.
      */
-    private static String decodeHtmlEntities(String text) {
+    public static String decodeHtmlEntities(String text) {
         if (text == null) return "";
         text = text.replaceAll("&amp;", "&")
                 .replaceAll("&lt;", "<")
