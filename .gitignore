@@ -7,6 +7,7 @@ local.properties
 attachments/
 .mailclient/
 logs/
+cache/
 
 ### IntelliJ IDEA ###
 .idea/

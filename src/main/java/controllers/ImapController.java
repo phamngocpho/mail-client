@@ -9,6 +9,7 @@ import raven.toast.Notifications;
 import services.ImapService;
 import utils.AsyncUtils;
 import utils.Constants;
+import utils.EmailCacheManager;
 
 import javax.swing.*;
 import java.io.File;
@@ -32,11 +33,20 @@ public class ImapController {
     private final List<Inbox> registeredInboxes = new ArrayList<>();
     private final Map<String, List<Email>> emailCache = new HashMap<>();
     private final Map<String, Long> cacheTimestamps = new HashMap<>();
+    
+    // Cache manager cho email body và attachments (lưu trên disk)
+    private static EmailCacheManager cacheManager = null;
 
     public ImapController(Inbox inboxPanel, String folderName) {
         this.inboxPanel = inboxPanel;
         this.imapService = new ImapService();
         this.currentFolder = folderName;
+        
+        // Initialize cache manager (singleton)
+        if (cacheManager == null) {
+            cacheManager = new EmailCacheManager();
+            logger.info("Initialized EmailCacheManager - {}", cacheManager.getCacheStats());
+        }
     }
 
     public void registerInbox(Inbox inbox) {
@@ -320,6 +330,33 @@ public class ImapController {
      * Load email body khi user click vào email
      */
     public void loadEmailBody(Email email, String folderName) {
+        int msgNum = email.getMessageNumber();
+        
+        // Kiểm tra cache trước (từ disk)
+        if (cacheManager.hasBody(msgNum)) {
+            logger.info("Using cached body from disk for message #{}", msgNum);
+            email.setBody(cacheManager.getBody(msgNum));
+            email.setBodyHtml(cacheManager.getBodyHtml(msgNum));
+            email.setHtml(cacheManager.getBodyHtml(msgNum) != null && !cacheManager.getBodyHtml(msgNum).isEmpty());
+            
+            // Restore attachments từ cache
+            List<File> cachedAttachments = cacheManager.getAttachments(msgNum);
+            if (cachedAttachments != null) {
+                for (File file : cachedAttachments) {
+                    email.addAttachment(file);
+                }
+                logger.debug("Restored {} attachments from disk cache", cachedAttachments.size());
+            }
+            
+            // Update UI
+            for (Inbox inbox : registeredInboxes) {
+                SwingUtilities.invokeLater(() -> inbox.updateEmailBody(email));
+            }
+            return;
+        }
+        
+        // Nếu không có cache, fetch từ server
+        logger.info("Fetching body from server for message #{}", msgNum);
         AsyncUtils.executeAsync(
             () -> {
                 try {
@@ -332,8 +369,11 @@ public class ImapController {
                 email.setBody(emailBody.plainText);
                 email.setBodyHtml(emailBody.html);
                 email.setHtml(!emailBody.html.isEmpty());
+                
+                // Lưu vào cache (disk)
+                cacheManager.cacheBody(msgNum, emailBody.plainText, emailBody.html);
 
-                logger.debug("Email body loaded. Attachments count: {}", emailBody.attachments.size());
+                logger.debug("Email body loaded from server. Attachments count: {}", emailBody.attachments.size());
                 logger.debug("Plain text preview: {}", AsyncUtils.createPreview(emailBody.plainText));
                 logger.debug("HTML preview: {}", AsyncUtils.createPreview(emailBody.html));
 
@@ -387,6 +427,10 @@ public class ImapController {
                 }
 
                 logger.debug("Total attachments added to email: {}", email.getAttachments().size());
+                
+                // Lưu attachments vào cache (disk)
+                cacheManager.cacheAttachments(msgNum, email.getAttachments());
+                logger.debug("Cached body and {} attachments to disk for message #{}", email.getAttachments().size(), msgNum);
 
                 // Update body cho tất cả inbox đang hiển thị email này
                 for (Inbox inbox : registeredInboxes) {
@@ -468,7 +512,8 @@ public class ImapController {
         imapService.disconnect();
         emailCache.clear();
         cacheTimestamps.clear();
-        logger.info("Cleared all email cache");
+        // Note: Không clear cacheManager vì nó lưu trên disk để dùng lại khi mở app
+        logger.info("Cleared email list cache (body cache retained on disk)");
     }
 
     /**
