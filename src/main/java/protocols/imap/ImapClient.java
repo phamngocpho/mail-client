@@ -143,7 +143,35 @@ public class ImapClient {
             throw new ImapException("No folder selected");
         }
 
-        List<Email> emails;
+        int totalCount = end - start + 1;
+        int batchSize = 25; // Fetch 25 emails at a time to avoid timeout
+        
+        // If range is small, fetch all at once
+        if (totalCount <= batchSize) {
+            return fetchEmailBatch(start, end);
+        }
+        
+        // Otherwise, fetch in batches
+        logger.info("Fetching {} emails in batches of {}", totalCount, batchSize);
+        List<Email> allEmails = new ArrayList<>();
+        
+        for (int batchStart = start; batchStart <= end; batchStart += batchSize) {
+            int batchEnd = Math.min(batchStart + batchSize - 1, end);
+            logger.debug("Fetching batch: {} to {} ({} of {})", 
+                        batchStart, batchEnd, allEmails.size(), totalCount);
+            
+            List<Email> batchEmails = fetchEmailBatch(batchStart, batchEnd);
+            allEmails.addAll(batchEmails);
+        }
+        
+        logger.info("Fetched total {} email headers from folder: {}", allEmails.size(), selectedFolder);
+        return allEmails;
+    }
+    
+    /**
+     * Fetch a single batch of emails (internal method)
+     */
+    private List<Email> fetchEmailBatch(int start, int end) throws ImapException {
         String tag = nextTag();
 
         // CHỈ FETCH HEADERS - KHÔNG FETCH BODY
@@ -167,8 +195,8 @@ public class ImapClient {
         }
 
         // Parse headers only
-        emails = parseFetchResponse(response);
-        logger.debug("Fetched {} email headers from folder: {}", emails.size(), selectedFolder);
+        List<Email> emails = parseFetchResponse(response);
+        logger.debug("Fetched {} email headers in this batch", emails.size());
 
         return emails;
     }

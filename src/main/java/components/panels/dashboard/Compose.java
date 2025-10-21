@@ -43,6 +43,11 @@ public class Compose extends JPanel {
 
     private final SmtpController controller;
     private JButton fromSelector;
+    
+    // References for dynamic components
+    private JLabel ccLabel;
+    private JLabel bccLabel;
+    private JPanel ccBccPanel;
 
     public Compose() {
         this.controller = SmtpController.getInstance();
@@ -59,7 +64,7 @@ public class Compose extends JPanel {
         setLayout(new MigLayout(
                 "fillx,insets 10",
                 "[60!][grow,fill][fill]",
-                "[][][][][][1!][grow,fill][][]"
+                "[]"  // Dynamic rows - no fixed row count
         ));
 
         // To field
@@ -67,25 +72,18 @@ public class Compose extends JPanel {
         toField = createTextField("Search or add a contact");
         toField.putClientProperty(FlatClientProperties.TEXT_FIELD_PADDING, new Insets(0, 4, 0, 4));
         add(toField, "growx,h 25!");
-        add(getCcBccPanel(), "wrap, al right");
+        ccBccPanel = getCcBccPanel();
+        add(ccBccPanel, "wrap, al right");
 
-        // CC field (hidden by default)
-        JLabel ccLabel = new JLabel("CC");
-        ccLabel.setVisible(false);
-        add(ccLabel, "");
+        // Create CC field components (not added to layout yet)
+        ccLabel = new JLabel("CC");
         ccField = createTextField("Add CC recipients");
-        ccField.setVisible(false);
         ccField.putClientProperty(FlatClientProperties.TEXT_FIELD_PADDING, new Insets(0, 4, 0, 4));
-        add(ccField, "growx,h 25!,span,wrap");
 
-        // BCC field (hidden by default)
-        JLabel bccLabel = new JLabel("BCC");
-        bccLabel.setVisible(false);
-        add(bccLabel, "");
+        // Create BCC field components (not added to layout yet)
+        bccLabel = new JLabel("BCC");
         bccField = createTextField("Add BCC recipients");
-        bccField.setVisible(false);
         bccField.putClientProperty(FlatClientProperties.TEXT_FIELD_PADDING, new Insets(0, 4, 0, 4));
-        add(bccField, "growx,h 25!,span,wrap");
 
         // Subject field
         add(new JLabel("Subject"), "");
@@ -101,6 +99,9 @@ public class Compose extends JPanel {
 
         // Separator
         add(new JSeparator(), "span,growx,h 1!,wrap");
+        
+        // Spacer to push body area down
+        add(new JLabel(), "span,h 1!,wrap");
 
         // Body area
         bodyArea = new JTextArea();
@@ -115,7 +116,7 @@ public class Compose extends JPanel {
 
         JScrollPane scrollPane = new JScrollPane(bodyArea);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
-        add(scrollPane, "span,grow,push,wrap");
+        add(scrollPane, "span,grow,push,wrap,wmin 0,hmin 0");
 
         // Attachment panel
         attachmentPanel = new JPanel(new MigLayout("wrap 1", "[grow]", "[]"));
@@ -222,29 +223,47 @@ public class Compose extends JPanel {
     }
 
     /**
+     * Helper method to find the index of a component in the panel.
+     * 
+     * @param component the component to find
+     * @return the index of the component, or -1 if not found
+     */
+    private int getComponentIndex(Component component) {
+        Component[] components = getComponents();
+        for (int i = 0; i < components.length; i++) {
+            if (components[i] == component) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
      * Toggles the visibility of the "CC" field and its associated components.
      * <p>
      * This method manages the visibility of components related to the "CC" field based on the
-     * current state. It updates the `ccVisible` flag and iterates through the components to find
-     * the "CC" label. Once located, it toggles the visibility of the label and the associated
-     * input field `ccField`. If the CC components are made visible, the input field requests focus.
+     * current state. It updates the `ccVisible` flag and dynamically adds or removes the CC
+     * field components from the layout. When made visible, the components are inserted after
+     * the "To" field. The input field requests focus when shown.
      * Finally, the method triggers a revalidation and repainting of the component hierarchy.
      */
     private void toggleCc() {
         ccVisible = !ccVisible;
-        Component[] components = getComponents();
-        for (int i = 0; i < components.length; i++) {
-            if (components[i] instanceof JLabel && ((JLabel) components[i]).getText().equals("CC")) {
-                components[i].setVisible(ccVisible);
-                if (i + 1 < components.length && components[i + 1] == ccField) {
-                    ccField.setVisible(ccVisible);
-                    if (ccVisible) {
-                        ccField.requestFocus();
-                    }
-                }
-                break;
+        
+        if (ccVisible) {
+            // Find the index after ccBccPanel to insert CC field
+            int index = getComponentIndex(ccBccPanel);
+            if (index >= 0) {
+                add(ccLabel, "", index + 1);
+                add(ccField, "growx,h 25!,span,wrap", index + 2);
+                ccField.requestFocus();
             }
+        } else {
+            // Remove CC components
+            remove(ccLabel);
+            remove(ccField);
         }
+        
         revalidate();
         repaint();
     }
@@ -255,10 +274,9 @@ public class Compose extends JPanel {
      * <p>
      * This method performs the following actions:
      * - Flips the value of the `bccVisible` boolean field, determining the visibility of the BCC field.
-     * - Iterates through the components of the form to locate the label with text "BCC".
-     *   - If found, updates the label's visibility based on the state of `bccVisible`.
-     *   - If the following component is the BCC input field (`bccField`), sets its visibility
-     *     accordingly and requests focus for it if it becomes visible.
+     * - Dynamically adds or removes the BCC field components from the layout.
+     * - When made visible, the components are inserted after the CC field (if visible) or after the "To" field.
+     * - If the BCC field becomes visible, it requests focus.
      * - Revalidates and repaints the user interface to reflect the changes.
      * <p>
      * This method ensures the BCC field and its associated label are dynamically shown or hidden
@@ -266,19 +284,28 @@ public class Compose extends JPanel {
      */
     private void toggleBcc() {
         bccVisible = !bccVisible;
-        Component[] components = getComponents();
-        for (int i = 0; i < components.length; i++) {
-            if (components[i] instanceof JLabel && ((JLabel) components[i]).getText().equals("BCC")) {
-                components[i].setVisible(bccVisible);
-                if (i + 1 < components.length && components[i + 1] == bccField) {
-                    bccField.setVisible(bccVisible);
-                    if (bccVisible) {
-                        bccField.requestFocus();
-                    }
-                }
-                break;
+        
+        if (bccVisible) {
+            // Find the index to insert BCC field
+            // If CC is visible, insert after CC field; otherwise after ccBccPanel
+            int index;
+            if (ccVisible) {
+                index = getComponentIndex(ccField);
+            } else {
+                index = getComponentIndex(ccBccPanel);
             }
+            
+            if (index >= 0) {
+                add(bccLabel, "", index + 1);
+                add(bccField, "growx,h 25!,span,wrap", index + 2);
+                bccField.requestFocus();
+            }
+        } else {
+            // Remove BCC components
+            remove(bccLabel);
+            remove(bccField);
         }
+        
         revalidate();
         repaint();
     }
@@ -432,14 +459,12 @@ public class Compose extends JPanel {
     /**
      * Clears all fields and components in the email composition form.
      * <p>
-     * This method resets the input fields, hides the CC and BCC fields along with
-     * their respective labels, clears any attachments from the attachment panel,
-     * and refreshes the user interface. The following actions are performed:
+     * This method resets the input fields, removes the CC and BCC fields from the layout,
+     * clears any attachments from the attachment panel, and refreshes the user interface. 
+     * The following actions are performed:
      * <p>
      * - Resets the text fields for "To", "CC", "BCC", "Subject", and "Body" to empty strings.
-     * - Iterates through all components, ensuring that "CC" and "BCC" labels, if present,
-     *   are hidden.
-     * - Hides the CC and BCC fields using `ccField.setVisible(false)` and `bccField.setVisible(false)`.
+     * - Removes CC and BCC fields from the layout if they are currently visible.
      * - Updates the `ccVisible` and `bccVisible` flags to `false`.
      * - Clears the `attachments` list that tracks attached files.
      * - Removes all components from the attachment panel to reflect the cleared attachments.
@@ -452,18 +477,18 @@ public class Compose extends JPanel {
         subjectField.setText("");
         bodyArea.setText("");
 
-        Component[] components = getComponents();
-        for (Component comp : components) {
-            if (comp instanceof JLabel label) {
-                if ("CC".equals(label.getText()) || "BCC".equals(label.getText())) {
-                    label.setVisible(false);
-                }
-            }
+        // Remove CC and BCC fields from layout if visible
+        if (ccVisible) {
+            remove(ccLabel);
+            remove(ccField);
+            ccVisible = false;
         }
-        ccField.setVisible(false);
-        bccField.setVisible(false);
-        ccVisible = false;
-        bccVisible = false;
+        
+        if (bccVisible) {
+            remove(bccLabel);
+            remove(bccField);
+            bccVisible = false;
+        }
 
         attachments.clear();
         attachmentPanel.removeAll();

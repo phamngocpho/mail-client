@@ -33,7 +33,7 @@ public class Constants {
     public static final int SMTP_PORT = 2;
 
     // Timeouts
-    public static final int SOCKET_TIMEOUT = 30000; // 30 seconds
+    public static final int SOCKET_TIMEOUT = 60000; // 60 seconds (increased for large email fetches)
     public static final int CONNECTION_TIMEOUT = 10000; // 10 seconds
 
     // IMAP Commands
