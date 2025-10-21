@@ -1,5 +1,6 @@
 package application;
 
+import com.formdev.flatlaf.extras.FlatSVGIcon;
 import com.formdev.flatlaf.fonts.roboto.FlatRobotoFont;
 import com.formdev.flatlaf.themes.FlatMacDarkLaf;
 import components.forms.FormsManager;
@@ -31,9 +32,11 @@ public class Application extends JFrame {
 
     private void init() {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setIconImage(new FlatSVGIcon("icons/application/mail_app.svg").getImage());
         Notifications.getInstance().show(Notifications.Type.SUCCESS, Notifications.Location.TOP_CENTER, "Welcome");
         setSize((int) Constants.dimension.getWidth(), (int) (Constants.dimension.getHeight() - Constants.taskBarSize));
         Notifications.getInstance().setJFrame(this);
+        setTitle("Mail Client");
         setLocationRelativeTo(null);
         setContentPane(new Welcome());
         setMinimumSize(new Dimension((int) (Constants.dimension.getWidth() / 2), (int) Constants.dimension.getHeight() * 3 / 5));

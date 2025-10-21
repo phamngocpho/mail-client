@@ -337,13 +337,21 @@ public class ImapController {
                 logger.debug("Plain text preview: {}", AsyncUtils.createPreview(emailBody.plainText));
                 logger.debug("HTML preview: {}", AsyncUtils.createPreview(emailBody.html));
 
-                // Tạo thư mục attachments trong project nếu chưa tồn tại
-                File attachmentDir = new File("attachments");
+                // Tạo thư mục attachments trong project root
+                // Lấy thư mục hiện tại và tìm thư mục Mail Client
+                File currentDir = new File(System.getProperty("user.dir"));
+                File projectRoot = currentDir.getName().equals("Mail Client") ? currentDir : new File(currentDir, "Mail Client");
+                File attachmentDir = new File(projectRoot, "attachments");
+                
                 if (!attachmentDir.exists()) {
                     if (!attachmentDir.mkdirs()) {
                         logger.warn("Failed to create directory: {}", attachmentDir.getAbsolutePath());
                         Notifications.getInstance().show(Notifications.Type.WARNING, "Failed to create directory for attachments");
+                    } else {
+                        logger.info("Created attachments directory: {}", attachmentDir.getAbsolutePath());
                     }
+                } else {
+                    logger.debug("Using existing attachments directory: {}", attachmentDir.getAbsolutePath());
                 }
 
                 for (ImapParser.Attachment att : emailBody.attachments) {
