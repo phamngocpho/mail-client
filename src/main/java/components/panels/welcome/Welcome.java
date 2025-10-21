@@ -7,6 +7,7 @@ import components.panels.MainPanel;
 import net.miginfocom.swing.MigLayout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import utils.PreferencesUtils;
 
 import javax.swing.*;
 import java.awt.*;
@@ -403,6 +404,10 @@ public class Welcome extends JPanel {
     }
 
     private void goToMainPanel() {
+        // Đánh dấu đã xem welcome screen
+        PreferencesUtils.setHasSeenWelcome(true);
+        logger.info("User has completed/skipped welcome screen");
+        
         FormsManager.getInstance().showForm(new MainPanel());
     }
 

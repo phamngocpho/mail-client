@@ -4,9 +4,12 @@ import com.formdev.flatlaf.extras.FlatSVGIcon;
 import com.formdev.flatlaf.fonts.roboto.FlatRobotoFont;
 import com.formdev.flatlaf.themes.FlatMacDarkLaf;
 import components.forms.FormsManager;
+import components.panels.MainPanel;
 import components.panels.welcome.Welcome;
 import raven.toast.Notifications;
 import utils.Constants;
+import utils.LogUtils;
+import utils.PreferencesUtils;
 
 import javax.swing.*;
 import java.awt.*;
@@ -38,12 +41,20 @@ public class Application extends JFrame {
         Notifications.getInstance().setJFrame(this);
         setTitle("Mail Client");
         setLocationRelativeTo(null);
-        setContentPane(new Welcome());
+        
+        if (PreferencesUtils.hasSeenWelcome()) {
+            setContentPane(new MainPanel());
+        } else {
+            setContentPane(new Welcome());
+        }
+        
         setMinimumSize(new Dimension((int) (Constants.dimension.getWidth() / 2), (int) Constants.dimension.getHeight() * 3 / 5));
         FormsManager.getInstance().initApplication(this);
     }
 
     public static void main(String[] args) {
+        LogUtils.initLogDirectory();
+        
         FlatRobotoFont.install();
         FlatMacDarkLaf.setup();
         UIManager.put("defaultFont", new Font(FlatRobotoFont.FAMILY, Font.PLAIN, Constants.systemFont.getSize() + 3));

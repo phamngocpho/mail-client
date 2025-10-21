@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
+    <!-- Set default log directory với fallback về Mail Client/logs -->
+    <property name="LOG_DIR" value="${LOG_DIR:-${user.dir}/Mail Client/logs}" />
+
     <!-- Console Appender - Log ra console -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -10,11 +13,11 @@
 
     <!-- File Appender - Log ra file -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/email-app.log</file>
+        <file>${LOG_DIR}/email-app.log</file>
 
         <!-- Rolling policy - Tự động tạo file mới theo ngày -->
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>logs/email-app.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>${LOG_DIR}/email-app.%d{yyyy-MM-dd}.log</fileNamePattern>
             <maxHistory>30</maxHistory> <!-- Giữ log 30 ngày -->
             <totalSizeCap>1GB</totalSizeCap> <!-- Tổng dung lượng tối đa -->
         </rollingPolicy>
@@ -26,13 +29,13 @@
 
     <!-- Error File Appender - Log riêng cho ERROR -->
     <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/email-app-error.log</file>
+        <file>${LOG_DIR}/email-app-error.log</file>
         <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
             <level>ERROR</level>
         </filter>
 
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>logs/email-app-error.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>${LOG_DIR}/email-app-error.%d{yyyy-MM-dd}.log</fileNamePattern>
             <maxHistory>90</maxHistory>
         </rollingPolicy>
 
