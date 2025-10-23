@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import protocols.imap.ImapClient;
 import protocols.imap.ImapException;
 import protocols.imap.ImapParser;
-import utils.AsyncUtils;
 import utils.EmailUtils;
 
 import java.util.ArrayList;
@@ -79,7 +78,7 @@ public class ImapService {
             // Fetch tất cả emails
             List<Email> emails = client.fetchEmails(1, messageCount);
             
-            logger.debug("{}", AsyncUtils.createFetchedEmailsLog(emails.size()));
+            logger.debug("Fetched {} emails before filtering", emails.size());
 
             // Sử dụng EmailUtils để filter và sort emails
             return EmailUtils.processEmails(emails);
@@ -108,7 +107,7 @@ public class ImapService {
 
             List<Email> emails = client.fetchEmails(start, messageCount);
             
-            logger.debug("{}", AsyncUtils.createFetchedEmailsLog(emails.size()));
+            logger.debug("Fetched {} emails before filtering", emails.size());
 
             // Sử dụng EmailUtils để filter và sort emails
             return EmailUtils.processEmails(emails);

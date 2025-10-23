@@ -417,8 +417,8 @@ public class ImapController {
                 cacheManager.cacheBody(msgNum, emailBody.plainText, emailBody.html);
 
                 logger.debug("Email body loaded from server. Attachments count: {}", emailBody.attachments.size());
-                logger.debug("Plain text preview: {}", AsyncUtils.createPreview(emailBody.plainText));
-                logger.debug("HTML preview: {}", AsyncUtils.createPreview(emailBody.html));
+                logger.debug("Plain text: {} chars", emailBody.plainText != null ? emailBody.plainText.length() : 0);
+                logger.debug("HTML: {} chars", emailBody.html != null ? emailBody.html.length() : 0);
 
                 // Tạo thư mục attachments trong cache directory để đồng nhất với cache
                 // Lấy đường dẫn từ location của class file

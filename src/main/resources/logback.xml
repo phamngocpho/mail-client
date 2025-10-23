@@ -56,7 +56,8 @@
     <logger name="services" level="INFO" />
     <logger name="protocols.imap" level="INFO" />
     <logger name="components" level="INFO" />
-    <logger name="components.panels.dashboard.Inbox" level="INFOINFO" />
+    <logger name="components.panels.dashboard.Inbox" level="INFO" />
+    <logger name="utils" level="INFO" />
 
     <!-- Tắt log verbose của thư viện bên ngoài -->
     <logger name="javax.mail" level="WARN" />
