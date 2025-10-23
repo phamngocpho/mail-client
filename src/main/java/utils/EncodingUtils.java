@@ -166,5 +166,65 @@ public class EncodingUtils {
             default -> charset;
         };
     }
+
+    /**
+     * Decodes an encoded filename string based on MIME encoding standards.
+     * If the input is null, empty, or not properly encoded, it returns a default
+     * value or the original string.
+     *
+     * @param filename the encoded filename string to be decoded; it may be in MIME
+     *                 encoded-word format (e.g., "=?charset?encoding?encoded text?=").
+     * @return the decoded version of the filename if it was properly encoded, or
+     *         the original string if decoding fails, or it doesn't match the
+     *         encoding pattern. If the input is null or empty, it returns "attachment".
+     */
+    public static String decodeFilename(String filename) {
+        if (filename == null || filename.isEmpty()) {
+            return "attachment";
+        }
+
+        if (!filename.startsWith("=?") || !filename.endsWith("?=")) {
+            return filename;
+        }
+
+        try {
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                "=\\?([^?]+)\\?([BQ])\\?([^?]+)\\?=", 
+                java.util.regex.Pattern.CASE_INSENSITIVE
+            );
+            java.util.regex.Matcher matcher = pattern.matcher(filename);
+
+            StringBuilder result = new StringBuilder();
+            int lastEnd = 0;
+
+            while (matcher.find()) {
+                result.append(filename, lastEnd, matcher.start());
+
+                String charset = matcher.group(1);
+                String encoding = matcher.group(2).toUpperCase();
+                String encodedText = matcher.group(3);
+
+                byte[] decodedBytes;
+                if (encoding.equals("B")) {
+                    decodedBytes = Base64.getDecoder().decode(encodedText);
+                } else {
+                    decodedBytes = decodeQuotedPrintable(encodedText).getBytes(StandardCharsets.ISO_8859_1);
+                }
+
+                String decoded = new String(decodedBytes, charset);
+                result.append(decoded);
+
+                lastEnd = matcher.end();
+            }
+
+            result.append(filename.substring(lastEnd));
+
+            return result.toString();
+
+        } catch (Exception e) {
+            // If decoding fails, return the original filename
+            return filename;
+        }
+    }
 }
 

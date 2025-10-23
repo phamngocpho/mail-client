@@ -10,6 +10,7 @@ import services.ImapService;
 import utils.AsyncUtils;
 import utils.Constants;
 import utils.EmailCacheManager;
+import utils.EncodingUtils;
 
 import javax.swing.*;
 import java.io.File;
@@ -458,7 +459,7 @@ public class ImapController {
 
                 for (ImapParser.Attachment att : emailBody.attachments) {
                     try {
-                        String decodedFilename = ImapParser.decodeFilename(att.filename);
+                        String decodedFilename = EncodingUtils.decodeFilename(att.filename);
                         String safeFilename = sanitizeFilename(decodedFilename);
 
                         logger.debug("Original: {} → Decoded: {} → Safe: {}",
