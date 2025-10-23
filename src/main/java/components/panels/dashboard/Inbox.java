@@ -348,7 +348,7 @@ public class Inbox extends JPanel {
         emailTable.setDefaultRenderer(String.class, new EmailCellRenderer());
         emailTable.setDefaultRenderer(ImageIcon.class, new StarCellRenderer());
 
-        // Mouse listener for star column clicks
+        // Mouse listener for star column clicks and row selection
         emailTable.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
@@ -369,17 +369,16 @@ public class Inbox extends JPanel {
                 int row = emailTable.rowAtPoint(e.getPoint());
                 int col = emailTable.columnAtPoint(e.getPoint());
 
+                // Toggle star khi click vào star column
                 if (col == 1 && row >= 0 && row < emails.size()) {
                     toggleStarred(row);
+                } 
+                // Chỉ chuyển sang detail view khi left-click
+                else if (SwingUtilities.isLeftMouseButton(e) && row >= 0 && row < emails.size()) {
+                    emailTable.setRowSelectionInterval(row, row);
+                    showEmailDetail(row);
+                    cardLayout.show(contentPanel, DETAIL_VIEW);
                 }
-            }
-        });
-
-        // Selection listener - chuyển sang detail view khi click email
-        emailTable.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting() && emailTable.getSelectedRow() >= 0) {
-                showEmailDetail(emailTable.getSelectedRow());
-                cardLayout.show(contentPanel, DETAIL_VIEW);
             }
         });
 
