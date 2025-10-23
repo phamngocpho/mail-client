@@ -86,6 +86,12 @@ public class Inbox extends JPanel {
     private FlatSVGIcon selectOutlineIcon;
     private final int iconSize = Constants.defaultIconSize - 5;
 
+    // View switching
+    private JPanel contentPanel;
+    private CardLayout cardLayout;
+    private static final String LIST_VIEW = "LIST";
+    private static final String DETAIL_VIEW = "DETAIL";
+
     // Controller
     private final ImapController controller;
     private static ImapController sharedController; // Controller dùng chung
@@ -147,22 +153,20 @@ public class Inbox extends JPanel {
         // Top toolbar với tabs (Primary, Social, Promotions, Updates)
         add(createTopToolbar(), "growx, wrap");
 
-        // Split pane: Email list | Detail view
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-        splitPane.setDividerLocation(700);
-        splitPane.setBorder(null);
+        // CardLayout để chuyển đổi giữa list view và detail view
+        cardLayout = new CardLayout();
+        contentPanel = new JPanel(cardLayout);
 
-        // Left: Email list
-        splitPane.setLeftComponent(createEmailListPanel());
+        // Add list view
+        contentPanel.add(createEmailListPanel(), LIST_VIEW);
 
-        // Right: Email detail
-        splitPane.setRightComponent(createDetailPanel());
-        splitPane.setDividerLocation((int) (Constants.dimension.getWidth() * 0.57));
-        splitPane.putClientProperty(FlatClientProperties.STYLE,
-                "gripDotCount: 0;"
-                        + "dividerSize: 5");
+        // Add detail view
+        contentPanel.add(createDetailPanel(), DETAIL_VIEW);
 
-        add(splitPane, "grow");
+        // Mặc định hiển thị list view
+        cardLayout.show(contentPanel, LIST_VIEW);
+
+        add(contentPanel, "grow");
     }
 
     /**
@@ -371,10 +375,11 @@ public class Inbox extends JPanel {
             }
         });
 
-        // Selection listener
+        // Selection listener - chuyển sang detail view khi click email
         emailTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting() && emailTable.getSelectedRow() >= 0) {
                 showEmailDetail(emailTable.getSelectedRow());
+                cardLayout.show(contentPanel, DETAIL_VIEW);
             }
         });
 
@@ -405,13 +410,25 @@ public class Inbox extends JPanel {
     }
 
     /**
-     * Email detail panel (right side)
+     * Email detail panel with back button
      */
     private JPanel createDetailPanel() {
         // BorderLayout để body có thể scroll độc lập
         JPanel detailPanel = new JPanel(new BorderLayout());
 
-        // Panel chứa header info (top)
+        // Back button toolbar (top)
+        JPanel backToolbar = new JPanel(new MigLayout("fillx, insets 10", "[]push", "[]"));
+        JButton backButton = new JButton(new FlatSVGIcon("icons/inbox/arrow_back.svg", iconSize, iconSize));
+        backButton.putClientProperty(FlatClientProperties.STYLE, "arc: 50; borderColor: null; focusColor: null");
+        backButton.setToolTipText("Back to inbox");
+        backButton.addActionListener(e -> goBackToList());
+        backToolbar.add(backButton);
+        detailPanel.add(backToolbar, BorderLayout.NORTH);
+
+        // Panel chứa header info và body
+        JPanel contentWrapper = new JPanel(new BorderLayout());
+
+        // Panel chứa header info (top of content)
         JPanel headerPanel = new JPanel(new MigLayout("fillx, insets 20", "[grow]", "[]10[]10[]10"));
 
         // Subject (large)
@@ -440,7 +457,7 @@ public class Inbox extends JPanel {
         attachmentsPanel.setVisible(false);
         headerPanel.add(attachmentsPanel, "growx, wrap, hidemode 3");
 
-        detailPanel.add(headerPanel, BorderLayout.NORTH);
+        contentWrapper.add(headerPanel, BorderLayout.NORTH);
 
         // Body - Panel riêng với scroll (center)
         bodyTextArea = new JTextArea();
@@ -454,9 +471,19 @@ public class Inbox extends JPanel {
         bodyScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         bodyScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
-        detailPanel.add(bodyScroll, BorderLayout.CENTER);
+        contentWrapper.add(bodyScroll, BorderLayout.CENTER);
+
+        detailPanel.add(contentWrapper, BorderLayout.CENTER);
 
         return detailPanel;
+    }
+
+    /**
+     * Go back to list view
+     */
+    private void goBackToList() {
+        cardLayout.show(contentPanel, LIST_VIEW);
+        emailTable.clearSelection();
     }
 
     /**
@@ -572,25 +599,6 @@ public class Inbox extends JPanel {
         });
         timer.setRepeats(false);
         return timer;
-    }
-
-    /**
-     * Update email body sau khi load xong
-     */
-    public void updateEmailBody(Email email) {
-        int selectedRow = emailTable.getSelectedRow();
-        if (selectedRow >= 0 && selectedRow < emails.size()) {
-            Email selectedEmail = emails.get(selectedRow);
-            if (selectedEmail.getMessageNumber() == email.getMessageNumber()) {
-                // Update body text - Decode HTML entities
-                String displayBody = email.getBody() != null ? 
-                        ImapParser.decodeHtmlEntities(email.getBody()) : "(No content)";
-                bodyTextArea.setText(displayBody);
-                bodyTextArea.setCaretPosition(0);
-
-                populateAttachmentsPanel(email.getAttachments());
-            }
-        }
     }
     
     /**
