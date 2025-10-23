@@ -1039,13 +1039,48 @@ public class ImapParser {
         return str.matches("^([A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$");
     }
 
-    private static String htmlToPlainText(String html) {
-        if (html == null) return "";
-        html = decodeHtmlEntities(html);
-        Pattern tagPattern = Pattern.compile("<[^>]*>");
-        html = tagPattern.matcher(html).replaceAll(" ");
-        html = html.replaceAll("\\s+", " ").trim();
-        return html;
+    /**
+     * Convert HTML to plain text, preserving line breaks and formatting.
+     * This is a public utility method that can be used by UI components.
+     */
+    public static String htmlToPlainText(String html) {
+        if (html == null || html.isEmpty()) {
+            return "";
+        }
+        
+        // Decode HTML entities first
+        String text = decodeHtmlEntities(html);
+        
+        // Remove entire form elements (they contain input/select/option tags)
+        // This prevents displaying all dropdown options as plain text
+        text = text.replaceAll("(?i)<select[^>]*>.*?</select>", "");
+        text = text.replaceAll("(?i)<input[^>]*>", "");
+        text = text.replaceAll("(?i)<textarea[^>]*>.*?</textarea>", "");
+        text = text.replaceAll("(?i)<button[^>]*>.*?</button>", "");
+        
+        // Remove script and style tags with their content
+        text = text.replaceAll("(?i)<script[^>]*>.*?</script>", "");
+        text = text.replaceAll("(?i)<style[^>]*>.*?</style>", "");
+        
+        // Replace common HTML line break tags with newlines
+        text = text.replaceAll("(?i)<br\\s*/?>", "\n");
+        text = text.replaceAll("(?i)</p>", "\n\n");
+        text = text.replaceAll("(?i)</div>", "\n");
+        text = text.replaceAll("(?i)</h[1-6]>", "\n\n");
+        text = text.replaceAll("(?i)</li>", "\n");
+        text = text.replaceAll("(?i)</tr>", "\n");
+        text = text.replaceAll("(?i)</td>", " ");
+        
+        // Remove all other HTML tags
+        text = text.replaceAll("<[^>]+>", "");
+        
+        // Clean up excessive whitespace and newlines
+        text = text.replaceAll(" +", " ");  // Multiple spaces → single space
+        text = text.replaceAll("\n ", "\n");  // Remove space after newline
+        text = text.replaceAll(" \n", "\n");  // Remove space before newline
+        text = text.replaceAll("\n{3,}", "\n\n");  // Max 2 consecutive newlines
+        
+        return text.trim();
     }
 
     /**
@@ -1058,24 +1093,66 @@ public class ImapParser {
      */
     public static String decodeHtmlEntities(String text) {
         if (text == null) return "";
+        
+        // Decode common named entities
         text = text.replaceAll("&amp;", "&")
                 .replaceAll("&lt;", "<")
                 .replaceAll("&gt;", ">")
                 .replaceAll("&quot;", "\"")
                 .replaceAll("&#39;", "'")
-                .replaceAll("&nbsp;", " ");
+                .replaceAll("&apos;", "'")
+                .replaceAll("&nbsp;", " ")
+                .replaceAll("&shy;", "")  // Soft hyphen - remove in plain text
+                .replaceAll("&#173;", "") // Soft hyphen numeric form
+                .replaceAll("&zwj;", "")  // Zero-width joiner
+                .replaceAll("&zwnj;", "") // Zero-width non-joiner
+                .replaceAll("&lrm;", "")  // Left-to-right mark
+                .replaceAll("&rlm;", ""); // Right-to-left mark
+        
+        // Decode numeric character references (&#123; or &#xAB;)
+        // Decimal format: &#173;
         Pattern numPattern = Pattern.compile("&#(\\d+);");
         Matcher numMatcher = numPattern.matcher(text);
         StringBuilder sb = new StringBuilder();
         while (numMatcher.find()) {
             try {
-                char ch = (char) Integer.parseInt(numMatcher.group(1));
-                numMatcher.appendReplacement(sb, String.valueOf(ch));
+                int charCode = Integer.parseInt(numMatcher.group(1));
+                // Skip invisible/control characters
+                if (charCode == 173 || charCode == 8203 || charCode == 8204 || 
+                    charCode == 8205 || charCode == 8206 || charCode == 8207) {
+                    numMatcher.appendReplacement(sb, "");
+                } else {
+                    char ch = (char) charCode;
+                    numMatcher.appendReplacement(sb, String.valueOf(ch));
+                }
             } catch (Exception ignored) {
                 numMatcher.appendReplacement(sb, numMatcher.group(0));
             }
         }
         numMatcher.appendTail(sb);
+        text = sb.toString();
+        
+        // Hex format: &#xAD;
+        Pattern hexPattern = Pattern.compile("&#[xX]([0-9A-Fa-f]+);");
+        Matcher hexMatcher = hexPattern.matcher(text);
+        sb = new StringBuilder();
+        while (hexMatcher.find()) {
+            try {
+                int charCode = Integer.parseInt(hexMatcher.group(1), 16);
+                // Skip invisible/control characters
+                if (charCode == 0xAD || charCode == 0x200B || charCode == 0x200C || 
+                    charCode == 0x200D || charCode == 0x200E || charCode == 0x200F) {
+                    hexMatcher.appendReplacement(sb, "");
+                } else {
+                    char ch = (char) charCode;
+                    hexMatcher.appendReplacement(sb, String.valueOf(ch));
+                }
+            } catch (Exception ignored) {
+                hexMatcher.appendReplacement(sb, hexMatcher.group(0));
+            }
+        }
+        hexMatcher.appendTail(sb);
+        
         return sb.toString();
     }
 

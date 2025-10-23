@@ -45,7 +45,7 @@
     </appender>
 
     <!-- Root logger -->
-    <root level="INFO">
+    <root level="DEBUG">
         <appender-ref ref="CONSOLE" />
         <appender-ref ref="FILE" />
         <appender-ref ref="ERROR_FILE" />
@@ -55,8 +55,8 @@
     <logger name="controllers" level="INFO" />
     <logger name="services" level="INFO" />
     <logger name="protocols.imap" level="INFO" />
-    <logger name="protocols.imap.ImapParser" level="INFO" />
     <logger name="components" level="INFO" />
+    <logger name="components.panels.dashboard.Inbox" level="INFOINFO" />
 
     <!-- Tắt log verbose của thư viện bên ngoài -->
     <logger name="javax.mail" level="WARN" />

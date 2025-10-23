@@ -645,6 +645,36 @@ public class Compose extends JPanel {
         return bodyArea.getText();
     }
 
+    // Setters for reply/forward functionality
+    public void setTo(String to) {
+        toField.setText(to);
+    }
+
+    public void setCc(String cc) {
+        ccField.setText(cc);
+    }
+
+    public void setBcc(String bcc) {
+        bccField.setText(bcc);
+    }
+
+    public void setSubject(String subject) {
+        subjectField.setText(subject);
+    }
+
+    public void setBody(String body) {
+        bodyArea.setText(body);
+    }
+
+    public void addAttachment(File file) {
+        if (file != null && file.exists()) {
+            attachments.add(file);
+            addAttachmentToPanel(file);
+            revalidate();
+            repaint();
+        }
+    }
+
     public static void main(String[] args) {
         FlatMacDarkLaf.setup();
         SwingUtilities.invokeLater(() -> {

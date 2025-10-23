@@ -3,6 +3,7 @@ package components.panels.dashboard;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 import components.dialogs.ImapLoginDialog;
+import components.panels.MainPanel;
 import controllers.ImapController;
 import net.miginfocom.swing.MigLayout;
 import models.Email;
@@ -79,6 +80,7 @@ public class Inbox extends JPanel {
     private JTextArea bodyTextArea;
     private JPanel attachmentsPanel;
     private List<Email> emails;
+    private Email currentViewingEmail; // Email đang được xem trong detail view
 
     // Star icons
     private FlatSVGIcon starFilledIcon;
@@ -416,16 +418,12 @@ public class Inbox extends JPanel {
         JPanel detailPanel = new JPanel(new BorderLayout());
 
         // Back button toolbar (top)
-        JPanel backToolbar = new JPanel(new MigLayout("fillx, insets 10", "[]push", "[]"));
-        JButton backButton = new JButton(new FlatSVGIcon("icons/inbox/arrow_back.svg", iconSize, iconSize));
-        backButton.putClientProperty(FlatClientProperties.STYLE, "arc: 50; borderColor: null; focusColor: null");
-        backButton.setToolTipText("Back to inbox");
-        backButton.addActionListener(e -> goBackToList());
-        backToolbar.add(backButton);
+        JPanel backToolbar = getBackToolbar();
+
         detailPanel.add(backToolbar, BorderLayout.NORTH);
 
         // Panel chứa header info và body
-        JPanel contentWrapper = new JPanel(new BorderLayout());
+        JPanel contentWrapper = new JPanel(new MigLayout("fill, insets 0", "[grow]", "[][grow]"));
 
         // Panel chứa header info (top of content)
         JPanel headerPanel = new JPanel(new MigLayout("fillx, insets 20", "[grow]", "[]10[]10[]10"));
@@ -451,15 +449,22 @@ public class Inbox extends JPanel {
         dateLabel.setForeground(Color.GRAY);
         headerPanel.add(dateLabel, "growx, wrap");
 
-        // Attachments panel - hidemode 3 để không chiếm space khi ẩn
-        attachmentsPanel = new JPanel(new MigLayout("insets 0,fillx", "[grow]", "[]"));
-        attachmentsPanel.setVisible(false);
-        headerPanel.add(attachmentsPanel, "growx, wrap, hidemode 3");
-
-        contentWrapper.add(headerPanel, BorderLayout.NORTH);
+        contentWrapper.add(headerPanel, "growx, wrap, gapbottom 0");
 
         // Body - Panel riêng với scroll (center)
-        bodyTextArea = new JTextArea();
+        bodyTextArea = new JTextArea() {
+            @Override
+            public Dimension getPreferredScrollableViewportSize() {
+                // Override để không bị giới hạn bởi default columns/rows
+                return getPreferredSize();
+            }
+            
+            @Override
+            public boolean getScrollableTracksViewportWidth() {
+                // Track viewport width để fill hết chiều ngang
+                return true;
+            }
+        };
         bodyTextArea.setLineWrap(true);
         bodyTextArea.setWrapStyleWord(true);
         bodyTextArea.setEditable(false);
@@ -470,11 +475,41 @@ public class Inbox extends JPanel {
         bodyScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         bodyScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
-        contentWrapper.add(bodyScroll, BorderLayout.CENTER);
+        contentWrapper.add(bodyScroll, "grow, push, wrap");
+
+        // Attachments panel - hidemode 3 để không chiếm space khi ẩn
+        // Sử dụng wrap để files tự động xuống dòng khi hết chỗ
+        attachmentsPanel = new JPanel(new MigLayout("insets 20, fillx, wrap 3", "[30%][30%][30%]", "[]"));
+        attachmentsPanel.setVisible(false);
+        contentWrapper.add(attachmentsPanel, "growx, hidemode 3");
 
         detailPanel.add(contentWrapper, BorderLayout.CENTER);
 
         return detailPanel;
+    }
+
+    private JPanel getBackToolbar() {
+        JPanel backToolbar = new JPanel(new MigLayout("fillx, insets 10", "[]push[][]", "[]"));
+        JButton backButton = new JButton(new FlatSVGIcon("icons/inbox/arrow_back.svg", iconSize, iconSize));
+        backButton.putClientProperty(FlatClientProperties.STYLE, "arc: 50; borderColor: null; focusColor: null");
+        backButton.setToolTipText("Back to inbox");
+        backButton.addActionListener(e -> goBackToList());
+        backToolbar.add(backButton);
+
+        // Reply button
+        JButton replyButton = new JButton(new FlatSVGIcon("icons/compose/reply.svg", iconSize, iconSize));
+        replyButton.putClientProperty(FlatClientProperties.STYLE, "arc: 50; borderColor: null; focusColor: null");
+        replyButton.setToolTipText("Reply");
+        replyButton.addActionListener(e -> handleReply());
+        backToolbar.add(replyButton, "gap right 5");
+
+        // Forward button
+        JButton forwardButton = new JButton(new FlatSVGIcon("icons/compose/forward.svg", iconSize, iconSize));
+        forwardButton.putClientProperty(FlatClientProperties.STYLE, "arc: 50; borderColor: null; focusColor: null");
+        forwardButton.setToolTipText("Forward");
+        forwardButton.addActionListener(e -> handleForward());
+        backToolbar.add(forwardButton);
+        return backToolbar;
     }
 
     /**
@@ -483,6 +518,216 @@ public class Inbox extends JPanel {
     private void goBackToList() {
         cardLayout.show(contentPanel, LIST_VIEW);
         emailTable.clearSelection();
+        currentViewingEmail = null;
+    }
+
+    /**
+     * Handle reply to current email
+     */
+    private void handleReply() {
+        if (currentViewingEmail == null) {
+            Notifications.getInstance().show(Notifications.Type.WARNING, "No email selected to reply");
+            return;
+        }
+
+        // Tạo Compose panel mới
+        Compose composePanel = new Compose();
+        
+        // Extract email address from "From" field
+        String replyTo = extractEmailAddress(currentViewingEmail.getFrom());
+        
+        // Set recipient (reply to sender)
+        composePanel.setTo(replyTo);
+        
+        // Set subject with "Re: " prefix
+        String subject = currentViewingEmail.getSubject() != null ? currentViewingEmail.getSubject() : "";
+        if (!subject.toLowerCase().startsWith("re:")) {
+            subject = "Re: " + subject;
+        }
+        composePanel.setSubject(subject);
+        
+        // Set body with quoted original message
+        String originalBody = currentViewingEmail.getBody() != null ? currentViewingEmail.getBody() : "";
+        String quotedBody = "\n\n--- Original Message ---\n"
+                + "From: " + currentViewingEmail.getFrom() + "\n"
+                + "Subject: " + currentViewingEmail.getSubject() + "\n\n"
+                + originalBody;
+        composePanel.setBody(quotedBody);
+        
+        // Show compose panel trong content area (giữ menu bar)
+        showComposePanel(composePanel);
+    }
+
+    /**
+     * Handle forward current email
+     */
+    private void handleForward() {
+        if (currentViewingEmail == null) {
+            Notifications.getInstance().show(Notifications.Type.WARNING, "No email selected to forward");
+            return;
+        }
+
+        // Tạo Compose panel mới
+        Compose composePanel = getComposePanel();
+
+        // Copy attachments if any
+        if (!currentViewingEmail.getAttachments().isEmpty()) {
+            for (File attachment : currentViewingEmail.getAttachments()) {
+                composePanel.addAttachment(attachment);
+            }
+        }
+        
+        // Show compose panel trong content area (giữ menu bar)
+        showComposePanel(composePanel);
+    }
+
+    private Compose getComposePanel() {
+        Compose composePanel = new Compose();
+
+        // Set subject with "Fwd: " prefix
+        String subject = currentViewingEmail.getSubject() != null ? currentViewingEmail.getSubject() : "";
+        if (!subject.toLowerCase().startsWith("fwd:") && !subject.toLowerCase().startsWith("fw:")) {
+            subject = "Fwd: " + subject;
+        }
+        composePanel.setSubject(subject);
+
+        // Set body with forwarded message
+        String originalBody = currentViewingEmail.getBody() != null ? currentViewingEmail.getBody() : "";
+        String forwardedBody = "\n\n--- Forwarded Message ---\n"
+                + "From: " + currentViewingEmail.getFrom() + "\n"
+                + "Subject: " + currentViewingEmail.getSubject() + "\n\n"
+                + originalBody;
+        composePanel.setBody(forwardedBody);
+        return composePanel;
+    }
+
+    /**
+     * Show compose panel in content area (keep menu visible)
+     */
+    private void showComposePanel(Compose composePanel) {
+        // Tìm MainPanel ancestor
+        MainPanel mainPanel = findMainPanel();
+        if (mainPanel != null) {
+            mainPanel.setContent(composePanel);
+        } else {
+            logger.warn("Cannot find MainPanel ancestor");
+            Notifications.getInstance().show(Notifications.Type.ERROR, "Cannot open compose window");
+        }
+    }
+
+    /**
+     * Find MainPanel ancestor in component hierarchy
+     */
+    private MainPanel findMainPanel() {
+        Container parent = getParent();
+        while (parent != null) {
+            if (parent instanceof MainPanel) {
+                return (MainPanel) parent;
+            }
+            parent = parent.getParent();
+        }
+        return null;
+    }
+
+    /**
+     * Extract email address from string like "Name <email@domain.com>"
+     */
+    private String extractEmailAddress(String emailString) {
+        if (emailString == null) return "";
+        
+        // Check if format is "Name <email@domain.com>"
+        if (emailString.contains("<") && emailString.contains(">")) {
+            int start = emailString.indexOf("<");
+            int end = emailString.indexOf(">");
+            return emailString.substring(start + 1, end).trim();
+        }
+        
+        return emailString.trim();
+    }
+
+    /**
+     * Unwrap hard line breaks in plain text emails.
+     * Email servers often insert line breaks at 76-78 characters per RFC 2822.
+     * This method removes those hard breaks while preserving intentional paragraph breaks.
+     * <p>
+     * Rules:
+     * - Keep line breaks after punctuation marks (. ! ? : ;)
+     * - Keep line breaks before/after list items (starting with numbers or bullets)
+     * - Remove line breaks in the middle of sentences (soft wrap)
+     */
+    private String unwrapPlainTextEmail(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+
+        // Split into paragraphs (separated by double newlines or more)
+        String[] paragraphs = text.split("\\n\\n+|\\r\\n\\r\\n+");
+        
+        StringBuilder result = new StringBuilder();
+        
+        for (int i = 0; i < paragraphs.length; i++) {
+            String paragraph = paragraphs[i].trim();
+            
+            if (paragraph.isEmpty()) {
+                continue;
+            }
+            
+            // Process line by line trong paragraph
+            StringBuilder unwrappedParagraph = getUnwrappedParagraph(paragraph);
+
+            // Dọn dẹp multiple spaces
+            String cleaned = unwrappedParagraph.toString()
+                    .replaceAll(" +", " ")  // Multiple spaces → single space
+                    .trim();
+            
+            result.append(cleaned);
+            
+            // Add paragraph break (except for last paragraph)
+            if (i < paragraphs.length - 1) {
+                result.append("\n\n");
+            }
+        }
+        
+        return result.toString();
+    }
+
+    private static StringBuilder getUnwrappedParagraph(String paragraph) {
+        String[] lines = paragraph.split("\\r?\\n");
+        StringBuilder unwrappedParagraph = new StringBuilder();
+
+        for (int j = 0; j < lines.length; j++) {
+            String line = lines[j].trim();
+
+            if (line.isEmpty()) {
+                continue;
+            }
+
+            unwrappedParagraph.append(line);
+
+            // Kiểm tra xem có nên giữ line break không
+            if (j < lines.length - 1) {
+                String nextLine = lines[j + 1].trim();
+
+                // Giữ line break nếu:
+                // 1. Dòng hiện tại kết thúc bằng dấu câu
+                if (line.matches(".*[.!?:;]\\s*$")) {
+                    unwrappedParagraph.append("\n");
+                }
+                // 2. Dòng tiếp theo bắt đầu bằng số hoặc bullet (list item)
+                else if (nextLine.matches("^[\\d\\-*•]+[.)\\s].*")) {
+                    unwrappedParagraph.append("\n");
+                }
+                // 3. Dòng hiện tại là list item
+                else if (line.matches("^[\\d\\-*•]+[.)\\s].*")) {
+                    unwrappedParagraph.append("\n");
+                }
+                // Ngược lại: unwrap (thêm space thay vì newline)
+                else {
+                    unwrappedParagraph.append(" ");
+                }
+            }
+        }
+        return unwrappedParagraph;
     }
 
     /**
@@ -497,52 +742,72 @@ public class Inbox extends JPanel {
 
             JLabel attachLabel = new JLabel("Attachments (" + attachments.size() + "):");
             attachLabel.putClientProperty(FlatClientProperties.STYLE, "font:bold");
-            attachmentsPanel.add(attachLabel, "wrap, gaptop 10");
+            attachmentsPanel.add(attachLabel, "span, wrap, gaptop 10");
 
             for (File file : attachments) {
-                JPanel filePanel = new JPanel(new MigLayout("insets 5", "[]10[]10[]", "[]"));
+                JPanel filePanel = new JPanel(new MigLayout("insets 8", "[]8[grow]", "[]2[]"));
                 filePanel.putClientProperty(FlatClientProperties.STYLE,
                         "arc:10;" +
                                 "background:lighten(@background,5%)");
-
+                filePanel.setCursor(new Cursor(Cursor.HAND_CURSOR));
+                
+                // Icon
                 JLabel iconLabel = new JLabel(getFileIcon(file));
-                filePanel.add(iconLabel, "aligny center");
+                filePanel.add(iconLabel, "aligny top, spany 2");
 
-                JButton fileBtn = getFileBtn(file);
-                filePanel.add(fileBtn, "aligny center");
+                // File name - truncate nếu quá dài
+                String fileName = file.getName();
+                String displayName = fileName.length() > 35
+                        ? fileName.substring(0, 32) + "..."
+                        : fileName;
+                JLabel nameLabel = new JLabel(displayName);
+                nameLabel.putClientProperty(FlatClientProperties.STYLE, "font:normal");
+                nameLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
+                filePanel.add(nameLabel, "growx, wrap");
 
+                // File size
                 String fileSize = formatFileSize(file.length());
                 JLabel sizeLabel = new JLabel(fileSize);
                 sizeLabel.setForeground(Color.GRAY);
-                filePanel.add(sizeLabel, "aligny center");
+                sizeLabel.putClientProperty(FlatClientProperties.STYLE, "font:-2");
+                filePanel.add(sizeLabel);
+                
+                // Click handler for panel
+                filePanel.addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mouseClicked(MouseEvent e) {
+                        openAttachment(file);
+                    }
+                    
+                    @Override
+                    public void mouseEntered(MouseEvent e) {
+                        filePanel.putClientProperty(FlatClientProperties.STYLE,
+                                "arc:10;" +
+                                "background:lighten(@background,8%)");
+                        filePanel.revalidate();
+                        filePanel.repaint();
+                    }
+                    
+                    @Override
+                    public void mouseExited(MouseEvent e) {
+                        filePanel.putClientProperty(FlatClientProperties.STYLE,
+                                "arc:10;" +
+                                "background:lighten(@background,5%)");
+                        filePanel.revalidate();
+                        filePanel.repaint();
+                    }
+                });
+                
+                // Tooltip
+                filePanel.setToolTipText("Click to open: " + fileName);
 
-                attachmentsPanel.add(filePanel, "growx, wrap, gaptop 5");
+                // Mỗi file chiếm 1 cell, tự động wrap sau 3 files
+                attachmentsPanel.add(filePanel, "growx, gaptop 5");
             }
         }
 
         attachmentsPanel.revalidate();
         attachmentsPanel.repaint();
-    }
-
-    /**
-     * Creates a JButton for the provided file, displaying its name (truncated if too long)
-     * and setting up an action to open the file on click.
-     *
-     * @param file the file for which the button is created
-     * @return a JButton configured to display the file name and open the file
-     */
-    private JButton getFileBtn(File file) {
-        String fileName = file.getName();
-        String displayName = fileName.length() > 40
-                ? fileName.substring(0, 37) + "..."
-                : fileName;
-        JButton fileBtn = new JButton("<html>" + displayName + "</html>");
-        fileBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE,
-                FlatClientProperties.BUTTON_TYPE_BORDERLESS);
-        fileBtn.setToolTipText("Click to open: " + fileName);
-        fileBtn.addActionListener(e -> openAttachment(file));
-        fileBtn.putClientProperty(FlatClientProperties.STYLE, "focusWidth: 0;");
-        return fileBtn;
     }
 
     /**
@@ -552,6 +817,7 @@ public class Inbox extends JPanel {
         if (row < 0 || row >= emails.size()) return;
 
         Email email = emails.get(row);
+        this.currentViewingEmail = email; // Lưu email đang xem
 
         String subject = email.getSubject() != null ? email.getSubject() : "(No Subject)";
         subjectLabel.setText("<html>" + subject + "</html>");
@@ -569,10 +835,44 @@ public class Inbox extends JPanel {
                 controller.loadEmailBody(email, folderName);
             }
         } else {
-            // Decode HTML entities trong plain text (vd: &#8202; → khoảng trắng)
-            String displayBody = ImapParser.decodeHtmlEntities(email.getBody());
+            // Ưu tiên HTML body (format tốt hơn), nếu không có thì dùng plain text
+            String displayBody;
+            if (email.getBodyHtml() != null && !email.getBodyHtml().isEmpty()) {
+                // Convert HTML sang plain text - giữ format tự nhiên từ HTML
+                displayBody = ImapParser.htmlToPlainText(email.getBodyHtml());
+            } else {
+                // Plain text: decode entities + unwrap hard line breaks
+                String decodedBody = ImapParser.decodeHtmlEntities(email.getBody());
+                displayBody = unwrapPlainTextEmail(decodedBody);
+            }
+            
             bodyTextArea.setText(displayBody);
             bodyTextArea.setCaretPosition(0);
+            
+            // Debug: Log kích thước khi set text (sau một chút để layout hoàn tất)
+            final String finalDisplayBody = displayBody;
+            SwingUtilities.invokeLater(() -> {
+                logger.debug("=== Email Body Display Debug (after layout) ===");
+                logger.debug("Body length: {} chars", finalDisplayBody.length());
+                logger.debug("bodyTextArea actual size: {}x{}", bodyTextArea.getWidth(), bodyTextArea.getHeight());
+                logger.debug("bodyTextArea preferredSize: {}", bodyTextArea.getPreferredSize());
+                logger.debug("bodyTextArea visibleRect: {}", bodyTextArea.getVisibleRect());
+                
+                Container scrollPane = bodyTextArea.getParent().getParent();
+                logger.debug("scrollPane size: {}x{}", scrollPane.getWidth(), scrollPane.getHeight());
+                logger.debug("scrollPane viewport size: {}x{}", 
+                        bodyTextArea.getParent().getWidth(), bodyTextArea.getParent().getHeight());
+                        
+                // Log parent hierarchy để debug layout
+                Container p = bodyTextArea.getParent();
+                int level = 0;
+                while (p != null && level < 5) {
+                    logger.debug("  Parent level {}: {} - size: {}x{}", 
+                            level, p.getClass().getSimpleName(), p.getWidth(), p.getHeight());
+                    p = p.getParent();
+                    level++;
+                }
+            });
         }
 
         // Tự động đánh dấu là đã đọc
@@ -621,12 +921,37 @@ public class Inbox extends JPanel {
         // Email vẫn được chọn, update UI
         logger.debug("Updating UI for email #{} (still selected)", email.getMessageNumber());
         
-        // Decode HTML entities trong plain text
-        String displayBody = email.getBody() != null ? 
-                ImapParser.decodeHtmlEntities(email.getBody()) : "(No content)";
+        // Ưu tiên HTML body (format tốt hơn), nếu không có thì dùng plain text
+        String displayBody;
+        if (email.getBodyHtml() != null && !email.getBodyHtml().isEmpty()) {
+            // Convert HTML sang plain text - giữ format tự nhiên từ HTML
+            displayBody = ImapParser.htmlToPlainText(email.getBodyHtml());
+            logger.debug("Using HTML body converted to plain text");
+        } else if (email.getBody() != null) {
+            // Plain text: decode entities + unwrap hard line breaks
+            String decodedBody = ImapParser.decodeHtmlEntities(email.getBody());
+            displayBody = unwrapPlainTextEmail(decodedBody);
+            logger.debug("Using plain text body with unwrap");
+        } else {
+            displayBody = "(No content)";
+        }
+        
         bodyTextArea.setText(displayBody);
         bodyTextArea.setCaretPosition(0);
         populateAttachmentsPanel(email.getAttachments());
+        
+        // Debug: Log kích thước sau khi setText
+        final String finalDisplayBody = displayBody;
+        final int messageNumber = email.getMessageNumber();
+        SwingUtilities.invokeLater(() -> {
+            logger.debug("=== updateEmailBodyIfCurrent Debug ===");
+            logger.debug("Email #{} body length: {} chars", messageNumber, finalDisplayBody.length());
+            logger.debug("bodyTextArea size: {}x{}", bodyTextArea.getWidth(), bodyTextArea.getHeight());
+            logger.debug("bodyTextArea viewport size: {}x{}", 
+                    bodyTextArea.getParent().getWidth(), bodyTextArea.getParent().getHeight());
+            logger.debug("First 200 chars of body: {}", 
+                    finalDisplayBody.length() > 200 ? finalDisplayBody.substring(0, 200) : finalDisplayBody);
+        });
     }
 
     /**
