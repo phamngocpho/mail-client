@@ -115,4 +115,223 @@ public class EmailUtils {
     public static String getEmailContentPreview(String content) {
         return getEmailContentPreview(content, 200);
     }
+    
+    /**
+     * Extract email address from string like "Name <email@domain.com>"
+     * 
+     * @param emailString email string có thể có format "Name <email@domain.com>" hoặc "email@domain.com"
+     * @return email address (chỉ phần email, không có tên)
+     */
+    public static String extractEmailAddress(String emailString) {
+        if (emailString == null || emailString.isEmpty()) {
+            return "";
+        }
+        
+        // Check if format is "Name <email@domain.com>"
+        if (emailString.contains("<") && emailString.contains(">")) {
+            int start = emailString.indexOf("<");
+            int end = emailString.indexOf(">");
+            if (start >= 0 && end > start) {
+                return emailString.substring(start + 1, end).trim();
+            }
+        }
+        
+        return emailString.trim();
+    }
+    
+    /**
+     * Extract name from email address
+     * "John Doe <john@example.com>" -> "John Doe"
+     * "john@example.com" -> "john"
+     * 
+     * @param emailString email string
+     * @return tên người gửi hoặc username nếu không có tên
+     */
+    public static String extractName(String emailString) {
+        if (emailString == null || emailString.isEmpty()) {
+            return "Unknown";
+        }
+        
+        // Nếu có format "Name <email@domain.com>"
+        if (emailString.contains("<")) {
+            String name = emailString.substring(0, emailString.indexOf("<")).trim();
+            return name.isEmpty() ? "Unknown" : name;
+        }
+        
+        // Nếu chỉ có email, lấy phần trước @
+        if (emailString.contains("@")) {
+            return emailString.split("@")[0];
+        }
+        
+        return emailString;
+    }
+    
+    /**
+     * Unwrap hard line breaks in plain text emails.
+     * Email servers often insert line breaks at 76-78 characters per RFC 2822.
+     * This method removes those hard breaks while preserving intentional paragraph breaks.
+     * <p>
+     * Rules:
+     * - Keep line breaks after punctuation marks (. ! ? : ;)
+     * - Keep line breaks before/after list items (starting with numbers or bullets)
+     * - Remove line breaks in the middle of sentences (soft wrap)
+     * 
+     * @param text plain text email content
+     * @return unwrapped text với formatting tự nhiên hơn
+     */
+    public static String unwrapPlainTextEmail(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+
+        // Split into paragraphs (separated by double newlines or more)
+        String[] paragraphs = text.split("\\n\\n+|\\r\\n\\r\\n+");
+        
+        StringBuilder result = new StringBuilder();
+        
+        for (int i = 0; i < paragraphs.length; i++) {
+            String paragraph = paragraphs[i].trim();
+            
+            if (paragraph.isEmpty()) {
+                continue;
+            }
+            
+            // Process line by line trong paragraph
+            StringBuilder unwrappedParagraph = unwrapParagraph(paragraph);
+
+            // Dọn dẹp multiple spaces
+            String cleaned = unwrappedParagraph.toString()
+                    .replaceAll(" +", " ")  // Multiple spaces → single space
+                    .trim();
+            
+            result.append(cleaned);
+            
+            // Add paragraph break (except for last paragraph)
+            if (i < paragraphs.length - 1) {
+                result.append("\n\n");
+            }
+        }
+        
+        return result.toString();
+    }
+    
+    /**
+     * Helper method to unwrap a single paragraph
+     */
+    private static StringBuilder unwrapParagraph(String paragraph) {
+        String[] lines = paragraph.split("\\r?\\n");
+        StringBuilder unwrappedParagraph = new StringBuilder();
+
+        for (int j = 0; j < lines.length; j++) {
+            String line = lines[j].trim();
+
+            if (line.isEmpty()) {
+                continue;
+            }
+
+            unwrappedParagraph.append(line);
+
+            // Kiểm tra xem có nên giữ line break không
+            if (j < lines.length - 1) {
+                String nextLine = lines[j + 1].trim();
+
+                // Giữ line break nếu:
+                // 1. Dòng hiện tại kết thúc bằng dấu câu
+                if (line.matches(".*[.!?:;]\\s*$")) {
+                    unwrappedParagraph.append("\n");
+                }
+                // 2. Dòng tiếp theo bắt đầu bằng số hoặc bullet (list item)
+                else if (nextLine.matches("^[\\d\\-*•]+[.)\\s].*")) {
+                    unwrappedParagraph.append("\n");
+                }
+                // 3. Dòng hiện tại là list item
+                else if (line.matches("^[\\d\\-*•]+[.)\\s].*")) {
+                    unwrappedParagraph.append("\n");
+                }
+                // Ngược lại: unwrap (thêm space thay vì newline)
+                else {
+                    unwrappedParagraph.append(" ");
+                }
+            }
+        }
+        return unwrappedParagraph;
+    }
+    
+    /**
+     * Format file size from bytes to human-readable format
+     * 
+     * @param bytes file size in bytes
+     * @return formatted string (e.g., "1.5 KB", "2.3 MB")
+     */
+    public static String formatFileSize(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        } else if (bytes < 1024 * 1024) {
+            return String.format("%.1f KB", bytes / 1024.0);
+        } else {
+            return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
+        }
+    }
+    
+    /**
+     * Check if email matches search query
+     * Searches in sender (from), subject, body, and HTML body
+     * 
+     * @param email The email to check
+     * @param query The search query (case-insensitive)
+     * @return true if email matches the query, false otherwise
+     */
+    public static boolean matchesSearchQuery(Email email, String query) {
+        if (query == null || query.isEmpty()) {
+            return true;
+        }
+        
+        String queryLower = query.toLowerCase();
+        
+        // Search in sender (from)
+        if (email.getFrom() != null && email.getFrom().toLowerCase().contains(queryLower)) {
+            return true;
+        }
+        
+        // Search in subject
+        if (email.getSubject() != null && email.getSubject().toLowerCase().contains(queryLower)) {
+            return true;
+        }
+        
+        // Search in body (if loaded)
+        if (email.getBody() != null && email.getBody().toLowerCase().contains(queryLower)) {
+            return true;
+        }
+        
+        // Search in HTML body (if loaded)
+        return email.getBodyHtml() != null && email.getBodyHtml().toLowerCase().contains(queryLower);
+    }
+    
+    /**
+     * Filter a list of emails by search query
+     * 
+     * @param emails List of emails to filter
+     * @param query Search query
+     * @return Filtered list of emails that match the query
+     */
+    public static List<Email> filterBySearchQuery(List<Email> emails, String query) {
+        if (emails == null || emails.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        if (query == null || query.isEmpty()) {
+            return new ArrayList<>(emails);
+        }
+        
+        List<Email> filtered = new ArrayList<>();
+        for (Email email : emails) {
+            if (matchesSearchQuery(email, query)) {
+                filtered.add(email);
+            }
+        }
+        
+        logger.debug("Filtered {} emails by query '{}', found {} matches", 
+                    emails.size(), query, filtered.size());
+        return filtered;
+    }
 }

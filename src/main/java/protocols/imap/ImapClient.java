@@ -5,6 +5,7 @@ import models.Folder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import utils.Constants;
+import utils.ImapUtils;
 import utils.NetworkUtils;
 
 import javax.net.ssl.SSLSocket;
@@ -89,10 +90,10 @@ public class ImapClient {
         }
 
         String tag = nextTag();
-        String command = String.format("%s LOGIN %s %s", tag, quote(username), quote(password));
+        String command = String.format("%s LOGIN %s %s", tag, ImapUtils.quoteImapString(username), ImapUtils.quoteImapString(password));
 
         // Log command (ẩn password)
-        logger.debug("→ {} LOGIN {} ****", tag, quote(username));
+        logger.debug("→ {} LOGIN {} ****", tag, ImapUtils.quoteImapString(username));
 
         sendCommand(command);
         String response = readFullResponse(tag);
@@ -114,7 +115,7 @@ public class ImapClient {
         }
 
         String tag = nextTag();
-        String command = String.format("%s SELECT %s", tag, quote(folderName));
+        String command = String.format("%s SELECT %s", tag, ImapUtils.quoteImapString(folderName));
 
         logger.debug("→ {}", command);
         sendCommand(command);
@@ -182,13 +183,6 @@ public class ImapClient {
         logger.debug("→ {}", command);
         sendCommand(command);
         String response = readFullResponse(tag);
-        
-        logger.debug("FETCH response length: {} bytes", response.length());
-        if (!response.isEmpty() && response.length() <= 5000) {
-            logger.debug("Full FETCH response: {}", response);
-        } else if (response.length() > 5000) {
-            logger.debug("FETCH response preview (first 5000 chars): {}", response.substring(0, 5000));
-        }
 
         if (ImapParser.isError(response, tag)) {
             throw new ImapException(command, response, "Failed to fetch emails");
@@ -200,6 +194,45 @@ public class ImapClient {
 
         return emails;
     }
+
+    /**
+     * Fetch emails theo danh sách message numbers (tối ưu cho search results)
+     * Fetch tất cả cùng lúc thay vì từng email một
+     * 
+     * @param messageNumbers danh sách message numbers cần fetch
+     * @return List emails đã fetch
+     */
+    public List<Email> fetchEmailsByNumbers(List<Integer> messageNumbers) throws ImapException {
+        if (selectedFolder == null) {
+            throw new ImapException("No folder selected");
+        }
+        
+        if (messageNumbers == null || messageNumbers.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        // Tạo sequence-set cho IMAP: "1,5,10,15" hoặc "1:5,10:15"
+        String sequenceSet = ImapUtils.buildSequenceSet(messageNumbers);
+        
+        String tag = nextTag();
+        String command = String.format("%s FETCH %s (FLAGS INTERNALDATE BODY[HEADER.FIELDS (FROM TO SUBJECT DATE)])",
+                tag, sequenceSet);
+
+        logger.debug("→ Fetching {} emails with sequence-set", messageNumbers.size());
+        sendCommand(command);
+        String response = readFullResponse(tag);
+
+        if (ImapParser.isError(response, tag)) {
+            throw new ImapException(command, response, "Failed to fetch emails by numbers");
+        }
+
+        // Parse headers
+        List<Email> emails = parseFetchResponse(response);
+        logger.debug("Fetched {} email headers", emails.size());
+
+        return emails;
+    }
+    
 
     /**
      * Fetch body của một email cụ thể
@@ -346,7 +379,7 @@ public class ImapClient {
         }
 
         String tag = nextTag();
-        String command = String.format("%s COPY %d %s", tag, messageNumber, quote(targetFolder));
+        String command = String.format("%s COPY %d %s", tag, messageNumber, ImapUtils.quoteImapString(targetFolder));
 
         logger.debug("→ {}", command);
         sendCommand(command);
@@ -488,21 +521,6 @@ public class ImapClient {
         return 0;
     }
 
-    /**
-     * Surrounds the given text with double quotes if it contains spaces or double-quote characters.
-     * Any existing double quotes within the text are escaped with a backslash.
-     *
-     * @param text the input string to be quoted
-     * @return the quoted string if the input contains spaces or double-quote characters,
-     *         otherwise returns the original string
-     */
-    private String quote(String text) {
-        // Thêm quotes (có space hoặc special chars)
-        if (text.contains(" ") || text.contains("\"")) {
-            return "\"" + text.replace("\"", "\\\"") + "\"";
-        }
-        return text;
-    }
 
     /**
      * Parse FETCH response thành list emails - CHỈ PARSE HEADERS
@@ -586,6 +604,117 @@ public class ImapClient {
         }
 
         return null;
+    }
+
+    /**
+     * Search emails trên server theo keyword
+     * Tìm kiếm trong toàn bộ email (subject, from, body)
+     * Hỗ trợ tiếng Việt có dấu và khoảng trắng
+     * 
+     * @param keyword từ khóa tìm kiếm
+     * @return List message numbers của emails tìm được
+     */
+    public List<Integer> searchEmails(String keyword) throws ImapException {
+        if (selectedFolder == null) {
+            throw new ImapException("No folder selected");
+        }
+        
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        String tag = nextTag();
+        
+        // Nếu keyword có ký tự đặc biệt (tiếng Việt, khoảng trắng), dùng CHARSET UTF-8
+        // IMAP SEARCH CHARSET UTF-8 OR OR SUBJECT "keyword" FROM "keyword" BODY "keyword"
+        boolean needsUtf8 = ImapUtils.needsUtf8Encoding(keyword);
+        
+        String quotedKeyword = ImapUtils.quoteImapString(keyword);
+        String command = getCommand(needsUtf8, tag, quotedKeyword);
+
+        logger.debug("Searching ENTIRE folder '{}' for: '{}'", selectedFolder, keyword);
+        logger.debug("→ {}", command);
+        sendCommand(command);
+        String response = readFullResponse(tag);
+        
+        if (ImapParser.isError(response, tag)) {
+            // Fallback: thử search đơn giản hơn nếu CHARSET không được hỗ trợ
+            logger.warn("CHARSET UTF-8 search failed, trying simple TEXT search");
+            return searchEmailsSimple(keyword);
+        }
+        
+        List<Integer> results = parseSearchResponse(response);
+        logger.debug("Search completed: found {} emails in ENTIRE folder (not limited to recent emails)", results.size());
+        return results;
+    }
+
+    private static String getCommand(boolean needsUtf8, String tag, String quotedKeyword) {
+        String command;
+
+        if (needsUtf8) {
+            // Tìm kiếm với UTF-8 charset trong SUBJECT, FROM, hoặc BODY
+            command = String.format("%s SEARCH CHARSET UTF-8 OR OR SUBJECT %s FROM %s BODY %s",
+                    tag, quotedKeyword, quotedKeyword, quotedKeyword);
+        } else {
+            // Tìm kiếm đơn giản với TEXT (cho ASCII)
+            command = String.format("%s SEARCH OR OR SUBJECT %s FROM %s BODY %s",
+                    tag, quotedKeyword, quotedKeyword, quotedKeyword);
+        }
+        return command;
+    }
+
+    /**
+     * Fallback search method - tìm kiếm đơn giản hơn khi CHARSET không được hỗ trợ
+     */
+    private List<Integer> searchEmailsSimple(String keyword) throws ImapException {
+        String tag = nextTag();
+        String quotedKeyword = ImapUtils.quoteImapString(keyword);
+        
+        // Thử với TEXT command đơn giản
+        String command = String.format("%s SEARCH TEXT %s", tag, quotedKeyword);
+        
+        logger.debug("→ {} (fallback)", command);
+        sendCommand(command);
+        String response = readFullResponse(tag);
+        
+        if (ImapParser.isError(response, tag)) {
+            // Nếu vẫn lỗi, trả về empty list thay vì throw exception
+            logger.error("Search failed for keyword: {}", keyword);
+            return new ArrayList<>();
+        }
+        
+        return parseSearchResponse(response);
+    }
+    
+    /**
+     * Parse SEARCH response để lấy list message numbers
+     * Response format: * SEARCH 1 5 10 15
+     */
+    private List<Integer> parseSearchResponse(String response) {
+        List<Integer> messageNumbers = new ArrayList<>();
+        
+        // Tìm dòng "* SEARCH ..."
+        String[] lines = response.split("\r\n");
+        for (String line : lines) {
+            if (line.startsWith("* SEARCH")) {
+                // Extract numbers sau "* SEARCH "
+                String numbersStr = line.substring("* SEARCH".length()).trim();
+                if (!numbersStr.isEmpty()) {
+                    String[] numbers = numbersStr.split("\\s+");
+                    for (String numStr : numbers) {
+                        try {
+                            messageNumbers.add(Integer.parseInt(numStr));
+                        } catch (NumberFormatException e) {
+                            logger.warn("Failed to parse message number: {}", numStr);
+                        }
+                    }
+                }
+                break;
+            }
+        }
+        
+        logger.debug("Search found {} messages: {}", messageNumbers.size(), messageNumbers);
+        return messageNumbers;
     }
 
     // Getters

@@ -221,6 +221,9 @@ public class ImapLoginDialog extends JDialog {
                     get(); // Check for exceptions - Nếu sai mật khẩu, exception sẽ throw ở đây
                     connected = true;
 
+                    // Lưu thông tin đăng nhập vào local.properties
+                    ConfigUtils.saveLoginCredentials(host, email, password);
+                    
                     Notifications.getInstance().show(Notifications.Type.SUCCESS, Notifications.Location.TOP_CENTER, "Connected successfully! Both IMAP and SMTP are configured.");
                     dispose();
                 } catch (Exception e) {

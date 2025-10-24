@@ -3,8 +3,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import raven.toast.Notifications;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Properties;
 
 /**
@@ -27,16 +29,90 @@ public class ConfigUtils {
     }
 
     private static void loadProperties() {
-        try (InputStream input = ConfigUtils.class.getClassLoader().getResourceAsStream("local.properties")) {
-            if (input == null) {
-                throw new IOException("local.properties not found in classpath");
+        try {
+            // Thử load từ resources trước
+            InputStream input = ConfigUtils.class.getClassLoader().getResourceAsStream("local.properties");
+            if (input != null) {
+                properties.load(input);
+                input.close();
+                loaded = true;
+                logger.info("Loaded local.properties from resources successfully");
+            } else {
+                logger.warn("local.properties not found in resources. User needs to login first.");
+                loaded = false;
             }
-            properties.load(input);
-            loaded = true;
-            logger.info("Loaded local.properties successfully");
-        } catch (IOException e) {
+        } catch (Exception e) {
             logger.error("Cannot load local.properties: {}", e.getMessage());
-            Notifications.getInstance().show(Notifications.Type.ERROR, "Cannot load local.properties!");
+            loaded = false;
+        }
+    }
+    
+    /**
+     * Get path to resources directory (src/main/resources)
+     */
+    private static Path getResourcesPath() {
+        try {
+            // Lấy đường dẫn từ class location
+            Path classPath = Paths.get(ConfigUtils.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI());
+            
+            String classPathStr = classPath.toString();
+            
+            if (classPathStr.contains("target" + File.separator + "classes")) {
+                // target/classes → src/main/resources
+                Path projectRoot = classPath.getParent().getParent();
+                return projectRoot.resolve("src").resolve("main").resolve("resources");
+            } else if (classPathStr.endsWith(".jar")) {
+                // lưu vào thư mục resources bên cạnh jar
+                Path jarDir = classPath.getParent();
+                Path resourcesDir = jarDir.resolve("resources");
+                if (!Files.exists(resourcesDir)) {
+                    Files.createDirectories(resourcesDir);
+                }
+                return resourcesDir;
+            } else {
+                // Fallback
+                return Paths.get(System.getProperty("user.dir"))
+                        .resolve("src").resolve("main").resolve("resources");
+            }
+        } catch (Exception e) {
+            logger.error("Error getting resources path: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+    
+    /**
+     * Save login credentials to local.properties in resources directory
+     */
+    public static void saveLoginCredentials(String imapHost, String email, String password) {
+        try {
+            Path resourcesPath = getResourcesPath();
+            if (resourcesPath == null) {
+                throw new IOException("Cannot determine resources path");
+            }
+            
+            Path configFilePath = resourcesPath.resolve("local.properties");
+            
+            // Update properties
+            properties.setProperty("imap_host", imapHost);
+            properties.setProperty("email", email);
+            properties.setProperty("app_password", password);
+            
+            // Derive SMTP host from IMAP host
+            String smtpHost = imapHost.replace("imap.", "smtp.");
+            properties.setProperty("smtp_host", smtpHost);
+            properties.setProperty("smtp_port", "587");
+            properties.setProperty("imap_port", "993");
+            
+            // Save to file
+            try (OutputStream output = Files.newOutputStream(configFilePath)) {
+                properties.store(output, "Mail Client Login Credentials");
+                loaded = true;
+                logger.info("Saved login credentials to: {}", configFilePath);
+            }
+        } catch (Exception e) {
+            logger.error("Error saving login credentials: {}", e.getMessage(), e);
+            Notifications.getInstance().show(Notifications.Type.ERROR, "Cannot save login credentials!");
         }
     }
 
@@ -67,5 +143,15 @@ public class ConfigUtils {
 
     public static boolean isLoaded() {
         return loaded;
+    }
+    
+    /**
+     * Check if we have valid login credentials
+     */
+    public static boolean hasValidCredentials() {
+        return loaded && 
+               !getEmail().isEmpty() && 
+               !getAppPassword().isEmpty() && 
+               !getImapHost().isEmpty();
     }
 }

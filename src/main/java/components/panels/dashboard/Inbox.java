@@ -12,6 +12,8 @@ import org.slf4j.LoggerFactory;
 import protocols.imap.ImapParser;
 import raven.toast.Notifications;
 import utils.Constants;
+import utils.EmailComposerHelper;
+import utils.EmailUtils;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -65,11 +67,11 @@ import static utils.UIUtils.getFileIcon;
  * - getFileBtn(File file): Creates and returns a button for an attachment file.
  * - showEmailDetail(int row): Displays the details of a selected email.
  * - updateEmailBody(Email email): Updates the email body after it has been loaded.
- * - formatFileSize(long bytes): Formats file sizes from bytes to a user-friendly string (e.g., KB, MB).
  * - loadEmails(List<Email> emailList): Loads a list of emails into the table.
  * - refreshTable(): Refreshes the entire email table.
- * - extractName(String email): Extracts the name from an email address.
  * - openAttachment(File file): Opens a given attachment file using the default application.
+ * <p>
+ * Note: String formatting and email parsing methods have been moved to EmailUtils for reusability.
  */
 public class Inbox extends JPanel {
     private static final Logger logger = LoggerFactory.getLogger(Inbox.class);
@@ -79,8 +81,11 @@ public class Inbox extends JPanel {
     private JLabel fromLabel, subjectLabel, dateLabel;
     private JTextArea bodyTextArea;
     private JPanel attachmentsPanel;
+    private Loading loadingPanel; // Loading overlay panel
     private List<Email> emails;
+    private List<Email> allEmails; // Danh sách email gốc (trước khi search)
     private Email currentViewingEmail; // Email đang được xem trong detail view
+    private String currentSearchQuery = ""; // Query tìm kiếm hiện tại
 
     // Star icons
     private FlatSVGIcon starFilledIcon;
@@ -108,6 +113,7 @@ public class Inbox extends JPanel {
         this.folderName = folderName;
         this.filterMode = filterMode;
         emails = new ArrayList<>();
+        allEmails = new ArrayList<>();
         loadIcons();
         init();
 
@@ -116,7 +122,8 @@ public class Inbox extends JPanel {
             this.controller = sharedController;
 
             if ("INBOX".equals(folderName)) {
-                SwingUtilities.invokeLater(this::showLoginDialog);
+                // Kiểm tra xem có credentials trong config không
+                SwingUtilities.invokeLater(this::tryAutoConnect);
             }
         } else {
             this.controller = sharedController;
@@ -131,6 +138,8 @@ public class Inbox extends JPanel {
 
         // Load emails nếu đã connected và không phải INBOX (INBOX sẽ load sau khi login)
         if (controller.isConnected() && !"INBOX".equals(folderName)) {
+            // Show loading skeleton trước khi load
+            showLoadingPanel("Loading " + folderName + "...", "Fetching messages");
             controller.loadFolder(folderName, Constants.EMAILS_PER_PAGE);
         }
     }
@@ -169,6 +178,11 @@ public class Inbox extends JPanel {
         cardLayout.show(contentPanel, LIST_VIEW);
 
         add(contentPanel, "grow");
+        
+        // Create and add loading panel
+        loadingPanel = new Loading();
+        loadingPanel.setVisible(false);
+        contentPanel.add(loadingPanel, "LOADING");
     }
 
     /**
@@ -214,13 +228,24 @@ public class Inbox extends JPanel {
         toolbar.add(categoryTabs, "w 400:600:, h 40!");
 
         // Search box (right side)
-        JButton searchButton = new JButton(new FlatSVGIcon("icons/inbox/search.svg", iconSize - 1, iconSize - 1));
-        searchButton.setMargin(new Insets(4, 4, 4, 4));
-
         JTextField searchField = new JTextField();
         searchField.putClientProperty(FlatClientProperties.STYLE, "arc: 50;");
-        searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_LEADING_COMPONENT, searchButton);
+        searchField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Search in emails (Press Enter)...");
         searchField.setPreferredSize(new Dimension(300, 40));
+        
+        JButton searchButton = new JButton(new FlatSVGIcon("icons/inbox/search.svg", iconSize - 1, iconSize - 1));
+        searchButton.setMargin(new Insets(4, 4, 4, 4));
+        searchButton.putClientProperty(FlatClientProperties.STYLE, "arc: 50; borderColor: null; focusColor: null");
+        searchButton.setToolTipText("Search");
+        
+        searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_LEADING_COMPONENT, searchButton);
+        
+        // Action khi nhấn Enter trong search field
+        searchField.addActionListener(e -> performSearch(searchField.getText()));
+        
+        // Action khi click search button
+        searchButton.addActionListener(e -> performSearch(searchField.getText()));
+        
         toolbar.add(searchField, "w 250:300:350, gap right 10, al right");
         return toolbar;
     }
@@ -260,20 +285,193 @@ public class Inbox extends JPanel {
     }
 
     /**
+     * Perform search in emails
+     * Delegates to ImapController.performSearch() which handles server/local logic
+     */
+    private void performSearch(String query) {
+        currentSearchQuery = query == null ? "" : query.trim();
+
+        // Show loading skeleton khi search
+        if (!currentSearchQuery.isEmpty()) {
+            if (controller != null && controller.isConnected()) {
+                showLoadingPanel("Searching entire mailbox...", 
+                                "Query: \"" + currentSearchQuery + "\" • Scope: Entire folder");
+            } else {
+                showLoadingPanel("Searching loaded emails...", 
+                                "Query: \"" + currentSearchQuery + "\" • Scope: Recently loaded only");
+            }
+        }
+        
+        // Delegate to controller
+        if (controller != null) {
+            controller.performSearch(currentSearchQuery, folderName, results -> {
+                // Update emails and refresh UI
+                allEmails = new ArrayList<>(results);
+                emails = new ArrayList<>(results);
+                refreshTable();
+                
+                // Hide loading và show list view
+                hideLoadingPanel();
+
+                // Nếu search và không có kết quả, hiển thị message trong detail view
+                if (!currentSearchQuery.isEmpty() && emails.isEmpty()) {
+                    subjectLabel.setText("<html>No results found</html>");
+                    fromLabel.setText("");
+                    dateLabel.setText("");
+                    bodyTextArea.setText("No emails match your search query: \"" + currentSearchQuery + "\"\n\n" +
+                                       (controller.isConnected() ? 
+                                           "Search was performed on ALL emails (not limited to recent 50)." :
+                                           "Note: Not connected. Only searched in recently loaded emails."));
+                    cardLayout.show(contentPanel, DETAIL_VIEW);
+                } else if (!currentSearchQuery.isEmpty() && !emails.isEmpty()) {
+                    // Có kết quả search - log thông tin
+                    logger.info("Found {} email(s) matching: \"{}\"", emails.size(), currentSearchQuery);
+                } else if (currentSearchQuery.isEmpty() && emails.isEmpty()) {
+                    // Clear search nhưng không có email nào
+                    subjectLabel.setText("<html>No emails found</html>");
+                    fromLabel.setText("");
+                    dateLabel.setText("");
+                    bodyTextArea.setText("Your inbox is empty or no emails match the current filter.");
+                    cardLayout.show(contentPanel, DETAIL_VIEW);
+                }
+
+                logger.debug("Search '{}' completed with {} results", currentSearchQuery, emails.size());
+            });
+        }
+    }
+
+    /**
      * Refresh a single email row
      */
     public void refreshEmailRow(Email email) {
         int index = emails.indexOf(email);
         if (index >= 0) {
             tableModel.setValueAt(
-                    email.hasFlag("Seen") ? extractName(email.getFrom()) :
-                            "<html><b>" + extractName(email.getFrom()) + "</b></html>",
+                    email.hasFlag("Seen") ? EmailUtils.extractName(email.getFrom()) :
+                            "<html><b>" + EmailUtils.extractName(email.getFrom()) + "</b></html>",
                     index, 2
             );
             tableModel.fireTableRowsUpdated(index, index);
         }
     }
 
+    /**
+     * Try to auto-connect using saved credentials from ConfigUtils
+     * Delegates to ImapController.tryAutoConnect()
+     */
+    private void tryAutoConnect() {
+        // Show loading panel immediately with detailed message
+        showLoadingPanel("Checking saved credentials...", "Reading configuration file");
+        
+        controller.tryAutoConnect(
+            folderName,
+            // onLoading - connecting to server
+            () -> {
+                updateLoadingPanel("Connecting to mail server...", "Authenticating with IMAP server");
+            },
+            // onSuccess - connection successful
+            () -> {
+                updateLoadingPanel("Loading emails...", "Fetching messages from server");
+                // Hide loading panel after a short delay (to show the final message)
+                Timer hideTimer = new Timer(800, e -> {
+                    hideLoadingPanel();
+                    Notifications.getInstance().show(Notifications.Type.SUCCESS, "Connected successfully!");
+                });
+                hideTimer.setRepeats(false);
+                hideTimer.start();
+            },
+            // onError - connection failed
+            (errorMsg) -> {
+                hideLoadingPanel();
+                if ("NO_CREDENTIALS".equals(errorMsg)) {
+                    logger.info("No saved credentials, showing login dialog");
+                    showLoginDialog();
+                } else {
+                    logger.error("Auto-connect failed: {}", errorMsg);
+                    Notifications.getInstance().show(Notifications.Type.ERROR, 
+                            "Auto-connect failed: " + errorMsg + ". Please login again.");
+                    
+                    subjectLabel.setText("<html>Connection Failed</html>");
+                    fromLabel.setText("");
+                    dateLabel.setText("");
+                    bodyTextArea.setText("Failed to connect with saved credentials.\n\n" +
+                            "Error: " + errorMsg + "\n\n" +
+                            "Please click 'Connect' button to enter your credentials again.");
+                    
+                    SwingUtilities.invokeLater(this::showLoginDialog);
+                }
+            }
+        );
+    }
+    
+    /**
+     * Show loading panel with message
+     */
+    private void showLoadingPanel(String message) {
+        showLoadingPanel(message, "Please wait...");
+    }
+    
+    /**
+     * Show loading panel with custom messages
+     */
+    private void showLoadingPanel(String message, String subMessage) {
+        if (loadingPanel != null) {
+            loadingPanel.setMessages(message, subMessage);
+            
+            SwingUtilities.invokeLater(() -> {
+                if (contentPanel != null && cardLayout != null) {
+                    cardLayout.show(contentPanel, "LOADING");
+                }
+                loadingPanel.setVisible(true);
+            });
+        }
+    }
+    
+    /**
+     * Update loading panel messages
+     */
+    private void updateLoadingPanel(String message, String subMessage) {
+        if (loadingPanel != null && loadingPanel.isVisible()) {
+            if (message != null) {
+                loadingPanel.setMessage(message);
+            }
+            if (subMessage != null) {
+                loadingPanel.setSubMessage(subMessage);
+            }
+        }
+    }
+    
+    /**
+     * Hide loading panel and return to list view
+     * Loading component tự động áp dụng minimum display time để tránh nhấp nháy
+     */
+    private void hideLoadingPanel() {
+        if (loadingPanel != null) {
+            // Loading component tự quản lý minimum display time
+            loadingPanel.hideWithMinimumDuration(() -> {
+                SwingUtilities.invokeLater(() -> {
+                    if (contentPanel != null && cardLayout != null) {
+                        cardLayout.show(contentPanel, LIST_VIEW);
+                    }
+                });
+            });
+        }
+    }
+    
+    /**
+     * Public method để reload folder với loading skeleton
+     * Được gọi từ MainMenu khi user click vào menu item
+     */
+    public void reloadFolder() {
+        if (controller != null && controller.isConnected()) {
+            // Show loading skeleton
+            showLoadingPanel("Loading " + folderName + "...", "Fetching messages");
+            // Update current folder và load
+            controller.setCurrentFolder(folderName);
+            controller.loadFolder(folderName, Constants.EMAILS_PER_PAGE);
+        }
+    }
+    
     /**
      * Show a login dialog to connect to IMAP
      */
@@ -523,6 +721,7 @@ public class Inbox extends JPanel {
 
     /**
      * Handle reply to current email
+     * Uses EmailComposerHelper to prepare the reply draft
      */
     private void handleReply() {
         if (currentViewingEmail == null) {
@@ -530,36 +729,22 @@ public class Inbox extends JPanel {
             return;
         }
 
-        // Tạo Compose panel mới
+        // Use helper to prepare reply draft
+        EmailComposerHelper.EmailDraft draft = EmailComposerHelper.prepareReply(currentViewingEmail);
+        
+        // Create compose panel and populate with draft data
         Compose composePanel = new Compose();
+        composePanel.setTo(draft.getTo());
+        composePanel.setSubject(draft.getSubject());
+        composePanel.setBody(draft.getBody());
         
-        // Extract email address from "From" field
-        String replyTo = extractEmailAddress(currentViewingEmail.getFrom());
-        
-        // Set recipient (reply to sender)
-        composePanel.setTo(replyTo);
-        
-        // Set subject with "Re: " prefix
-        String subject = currentViewingEmail.getSubject() != null ? currentViewingEmail.getSubject() : "";
-        if (!subject.toLowerCase().startsWith("re:")) {
-            subject = "Re: " + subject;
-        }
-        composePanel.setSubject(subject);
-        
-        // Set body with quoted original message
-        String originalBody = currentViewingEmail.getBody() != null ? currentViewingEmail.getBody() : "";
-        String quotedBody = "\n\n--- Original Message ---\n"
-                + "From: " + currentViewingEmail.getFrom() + "\n"
-                + "Subject: " + currentViewingEmail.getSubject() + "\n\n"
-                + originalBody;
-        composePanel.setBody(quotedBody);
-        
-        // Show compose panel trong content area (giữ menu bar)
+        // Show compose panel
         showComposePanel(composePanel);
     }
 
     /**
      * Handle forward current email
+     * Uses EmailComposerHelper to prepare the forward draft
      */
     private void handleForward() {
         if (currentViewingEmail == null) {
@@ -567,38 +752,24 @@ public class Inbox extends JPanel {
             return;
         }
 
-        // Tạo Compose panel mới
-        Compose composePanel = getComposePanel();
-
+        // Use helper to prepare forward draft
+        EmailComposerHelper.EmailDraft draft = EmailComposerHelper.prepareForward(currentViewingEmail);
+        
+        // Create compose panel and populate with draft data
+        Compose composePanel = new Compose();
+        composePanel.setTo(draft.getTo());
+        composePanel.setSubject(draft.getSubject());
+        composePanel.setBody(draft.getBody());
+        
         // Copy attachments if any
-        if (!currentViewingEmail.getAttachments().isEmpty()) {
-            for (File attachment : currentViewingEmail.getAttachments()) {
+        if (draft.getAttachments() != null && !draft.getAttachments().isEmpty()) {
+            for (File attachment : draft.getAttachments()) {
                 composePanel.addAttachment(attachment);
             }
         }
         
-        // Show compose panel trong content area (giữ menu bar)
+        // Show compose panel
         showComposePanel(composePanel);
-    }
-
-    private Compose getComposePanel() {
-        Compose composePanel = new Compose();
-
-        // Set subject with "Fwd: " prefix
-        String subject = currentViewingEmail.getSubject() != null ? currentViewingEmail.getSubject() : "";
-        if (!subject.toLowerCase().startsWith("fwd:") && !subject.toLowerCase().startsWith("fw:")) {
-            subject = "Fwd: " + subject;
-        }
-        composePanel.setSubject(subject);
-
-        // Set body with forwarded message
-        String originalBody = currentViewingEmail.getBody() != null ? currentViewingEmail.getBody() : "";
-        String forwardedBody = "\n\n--- Forwarded Message ---\n"
-                + "From: " + currentViewingEmail.getFrom() + "\n"
-                + "Subject: " + currentViewingEmail.getSubject() + "\n\n"
-                + originalBody;
-        composePanel.setBody(forwardedBody);
-        return composePanel;
     }
 
     /**
@@ -629,106 +800,6 @@ public class Inbox extends JPanel {
         return null;
     }
 
-    /**
-     * Extract email address from string like "Name <email@domain.com>"
-     */
-    private String extractEmailAddress(String emailString) {
-        if (emailString == null) return "";
-        
-        // Check if format is "Name <email@domain.com>"
-        if (emailString.contains("<") && emailString.contains(">")) {
-            int start = emailString.indexOf("<");
-            int end = emailString.indexOf(">");
-            return emailString.substring(start + 1, end).trim();
-        }
-        
-        return emailString.trim();
-    }
-
-    /**
-     * Unwrap hard line breaks in plain text emails.
-     * Email servers often insert line breaks at 76-78 characters per RFC 2822.
-     * This method removes those hard breaks while preserving intentional paragraph breaks.
-     * <p>
-     * Rules:
-     * - Keep line breaks after punctuation marks (. ! ? : ;)
-     * - Keep line breaks before/after list items (starting with numbers or bullets)
-     * - Remove line breaks in the middle of sentences (soft wrap)
-     */
-    private String unwrapPlainTextEmail(String text) {
-        if (text == null || text.isEmpty()) {
-            return text;
-        }
-
-        // Split into paragraphs (separated by double newlines or more)
-        String[] paragraphs = text.split("\\n\\n+|\\r\\n\\r\\n+");
-        
-        StringBuilder result = new StringBuilder();
-        
-        for (int i = 0; i < paragraphs.length; i++) {
-            String paragraph = paragraphs[i].trim();
-            
-            if (paragraph.isEmpty()) {
-                continue;
-            }
-            
-            // Process line by line trong paragraph
-            StringBuilder unwrappedParagraph = getUnwrappedParagraph(paragraph);
-
-            // Dọn dẹp multiple spaces
-            String cleaned = unwrappedParagraph.toString()
-                    .replaceAll(" +", " ")  // Multiple spaces → single space
-                    .trim();
-            
-            result.append(cleaned);
-            
-            // Add paragraph break (except for last paragraph)
-            if (i < paragraphs.length - 1) {
-                result.append("\n\n");
-            }
-        }
-        
-        return result.toString();
-    }
-
-    private static StringBuilder getUnwrappedParagraph(String paragraph) {
-        String[] lines = paragraph.split("\\r?\\n");
-        StringBuilder unwrappedParagraph = new StringBuilder();
-
-        for (int j = 0; j < lines.length; j++) {
-            String line = lines[j].trim();
-
-            if (line.isEmpty()) {
-                continue;
-            }
-
-            unwrappedParagraph.append(line);
-
-            // Kiểm tra xem có nên giữ line break không
-            if (j < lines.length - 1) {
-                String nextLine = lines[j + 1].trim();
-
-                // Giữ line break nếu:
-                // 1. Dòng hiện tại kết thúc bằng dấu câu
-                if (line.matches(".*[.!?:;]\\s*$")) {
-                    unwrappedParagraph.append("\n");
-                }
-                // 2. Dòng tiếp theo bắt đầu bằng số hoặc bullet (list item)
-                else if (nextLine.matches("^[\\d\\-*•]+[.)\\s].*")) {
-                    unwrappedParagraph.append("\n");
-                }
-                // 3. Dòng hiện tại là list item
-                else if (line.matches("^[\\d\\-*•]+[.)\\s].*")) {
-                    unwrappedParagraph.append("\n");
-                }
-                // Ngược lại: unwrap (thêm space thay vì newline)
-                else {
-                    unwrappedParagraph.append(" ");
-                }
-            }
-        }
-        return unwrappedParagraph;
-    }
 
     /**
      * Populate attachments panel
@@ -766,7 +837,7 @@ public class Inbox extends JPanel {
                 filePanel.add(nameLabel, "growx, wrap");
 
                 // File size
-                String fileSize = formatFileSize(file.length());
+                String fileSize = EmailUtils.formatFileSize(file.length());
                 JLabel sizeLabel = new JLabel(fileSize);
                 sizeLabel.setForeground(Color.GRAY);
                 sizeLabel.putClientProperty(FlatClientProperties.STYLE, "font:-2");
@@ -843,7 +914,7 @@ public class Inbox extends JPanel {
             } else {
                 // Plain text: decode entities + unwrap hard line breaks
                 String decodedBody = ImapParser.decodeHtmlEntities(email.getBody());
-                displayBody = unwrapPlainTextEmail(decodedBody);
+                displayBody = EmailUtils.unwrapPlainTextEmail(decodedBody);
             }
             
             bodyTextArea.setText(displayBody);
@@ -930,7 +1001,7 @@ public class Inbox extends JPanel {
         } else if (email.getBody() != null) {
             // Plain text: decode entities + unwrap hard line breaks
             String decodedBody = ImapParser.decodeHtmlEntities(email.getBody());
-            displayBody = unwrapPlainTextEmail(decodedBody);
+            displayBody = EmailUtils.unwrapPlainTextEmail(decodedBody);
             logger.debug("Using plain text body with unwrap");
         } else {
             displayBody = "(No content)";
@@ -954,50 +1025,91 @@ public class Inbox extends JPanel {
         });
     }
 
-    /**
-     * Format file size (bytes -> KB/MB)
-     */
-    private String formatFileSize(long bytes) {
-        if (bytes < 1024) {
-            return bytes + " B";
-        } else if (bytes < 1024 * 1024) {
-            return String.format("%.1f KB", bytes / 1024.0);
-        } else {
-            return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
-        }
-    }
 
     /**
      * Load emails (call from controller)
      */
     public void loadEmails(List<Email> emailList) {
+        loadEmails(emailList, false);
+    }
+    
+    /**
+     * Load search results từ server (không filter lại local)
+     */
+    public void loadSearchResults(List<Email> emailList) {
+        loadEmails(emailList, true);
+    }
+    
+    /**
+     * Load emails với option chỉ định có phải từ server search không
+     * 
+     * @param emailList danh sách emails
+     * @param fromServerSearch true nếu đây là kết quả từ server search (không filter lại)
+     */
+    private void loadEmails(List<Email> emailList, boolean fromServerSearch) {
         // Lọc emails theo filterMode
+        List<Email> filteredEmails;
         if ("STARRED".equals(filterMode)) {
-            this.emails = emailList.stream()
+            filteredEmails = emailList.stream()
                     .filter(email -> email.hasFlag("Flagged"))
                     .collect(java.util.stream.Collectors.toList());
         } else if ("UNREAD".equals(filterMode)) {
-            this.emails = emailList.stream()
+            filteredEmails = emailList.stream()
                     .filter(email -> !email.hasFlag("Seen"))
                     .collect(java.util.stream.Collectors.toList());
         } else {
-            this.emails = emailList;
+            filteredEmails = emailList;
+        }
+        
+        // Lưu danh sách gốc (sau khi filter mode nhưng trước khi search)
+        this.allEmails = new ArrayList<>(filteredEmails);
+        
+        // Nếu đây là kết quả từ server search, không filter lại local
+        if (fromServerSearch) {
+            this.emails = new ArrayList<>(allEmails);
+            logger.debug("Loaded {} search results from server (no local filtering)", emails.size());
+        }
+        // Apply local search nếu có và không phải từ server search
+        else if (currentSearchQuery != null && !currentSearchQuery.isEmpty()) {
+            this.emails = EmailUtils.filterBySearchQuery(allEmails, currentSearchQuery);
+            logger.debug("Applied local search filter: {} emails match", emails.size());
+        } else {
+            this.emails = new ArrayList<>(allEmails);
         }
 
         refreshTable();
+        
+        // Hide loading panel after data is loaded
+        hideLoadingPanel();
 
         if (emails.isEmpty()) {
-            String message = "STARRED".equals(filterMode)
-                    ? "No starred emails found"
-                    : "UNREAD".equals(filterMode)
-                    ? "No unread emails found"
-                    : "Your inbox is empty or no emails match the current filter.";
+            String message = getMessage();
 
             subjectLabel.setText("<html>No emails found</html>");
             fromLabel.setText("");
             dateLabel.setText("");
             bodyTextArea.setText(message);
+        } else if (fromServerSearch && currentSearchQuery != null && !currentSearchQuery.isEmpty()) {
+            // Thông báo thành công cho server search
+            logger.info("Displaying {} search results from entire folder", emails.size());
         }
+    }
+
+    private String getMessage() {
+        String message;
+        if (currentSearchQuery != null && !currentSearchQuery.isEmpty()) {
+            message = """
+                    No emails match your search query in the ENTIRE folder.
+                    
+                    Search was performed on ALL emails (not limited to recent 50).""";
+        } else if ("STARRED".equals(filterMode)) {
+            message = "No starred emails found";
+        } else if ("UNREAD".equals(filterMode)) {
+            message = "No unread emails found";
+        } else {
+            message = "Your inbox is empty or no emails match the current filter.";
+        }
+        return message;
     }
 
     /**
@@ -1015,7 +1127,7 @@ public class Inbox extends JPanel {
             boolean isRead = email.hasFlag("Seen");
             boolean isStarred = email.hasFlag("Flagged");
 
-            String sender = email.getFrom() != null ? extractName(email.getFrom()) : "Unknown";
+            String sender = email.getFrom() != null ? EmailUtils.extractName(email.getFrom()) : "Unknown";
             String subject = email.getSubject() != null ? email.getSubject() : "(No Subject)";
             String time = email.getDate() != null ? sdf.format(email.getDate()) : "";
 
@@ -1040,17 +1152,6 @@ public class Inbox extends JPanel {
         }
     }
 
-    /**
-     * Extract name from email address
-     * "John Doe <john@example.com>" -> "John Doe"
-     */
-    private String extractName(String email) {
-        if (email == null) return "Unknown";
-        if (email.contains("<")) {
-            return email.substring(0, email.indexOf("<")).trim();
-        }
-        return email.split("@")[0];
-    }
 
     /**
      * Custom cell renderer for email rows

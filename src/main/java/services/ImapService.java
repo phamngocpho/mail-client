@@ -77,8 +77,6 @@ public class ImapService {
 
             // Fetch tất cả emails
             List<Email> emails = client.fetchEmails(1, messageCount);
-            
-            logger.debug("Fetched {} emails before filtering", emails.size());
 
             // Sử dụng EmailUtils để filter và sort emails
             return EmailUtils.processEmails(emails);
@@ -106,8 +104,6 @@ public class ImapService {
             int start = Math.max(1, messageCount - count + 1);
 
             List<Email> emails = client.fetchEmails(start, messageCount);
-            
-            logger.debug("Fetched {} emails before filtering", emails.size());
 
             // Sử dụng EmailUtils để filter và sort emails
             return EmailUtils.processEmails(emails);
@@ -241,6 +237,52 @@ public class ImapService {
         }
 
         return client.listFolders();
+    }
+
+    /**
+     * Search emails trên server theo keyword
+     * Tìm trong toàn bộ email (subject, from, body)
+     * 
+     * @param folderName folder cần tìm kiếm
+     * @param keyword từ khóa tìm kiếm
+     * @return List emails tìm được
+     */
+    public List<Email> searchEmails(String folderName, String keyword) throws ImapException {
+        if (!isConnected) {
+            throw new ImapException("Not connected. Call connect() first.");
+        }
+        
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        try {
+            // Select folder nếu cần
+            if (!folderName.equals(client.getSelectedFolder())) {
+                client.selectFolder(folderName);
+            }
+            
+            // Search để lấy message numbers
+            List<Integer> messageNumbers = client.searchEmails(keyword);
+            
+            if (messageNumbers.isEmpty()) {
+                logger.info("Search '{}' found 0 emails in folder '{}'", keyword, folderName);
+                return new ArrayList<>();
+            }
+            
+            logger.info("Search found {} message numbers in ENTIRE folder, fetching details...", messageNumbers.size());
+            
+            // Fetch tất cả emails cùng lúc (tối ưu hơn nhiều so với fetch từng email)
+            List<Email> emails = client.fetchEmailsByNumbers(messageNumbers);
+            
+            logger.info("Search '{}' completed: found {} emails in ENTIRE folder '{}' (not limited by recent fetch)",
+                       keyword, emails.size(), folderName);
+            
+            // Sử dụng EmailUtils để filter và sort emails
+            return EmailUtils.processEmails(emails);
+        } catch (ImapException e) {
+            throw new ImapException("Failed to search emails: " + e.getMessage(), e);
+        }
     }
 
     /**

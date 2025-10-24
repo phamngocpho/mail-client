@@ -10,6 +10,7 @@ import services.ImapService;
 import utils.AsyncUtils;
 import utils.Constants;
 import utils.EmailCacheManager;
+import utils.EmailUtils;
 import utils.EncodingUtils;
 
 import javax.swing.*;
@@ -161,6 +162,70 @@ public class ImapController {
     }
 
     /**
+     * Try to auto-connect using saved credentials from ConfigUtils
+     * If credentials are available, connects automatically in background
+     * If connection fails or no credentials, invokes appropriate callback
+     * 
+     * @param folderName The folder to load after connection
+     * @param onLoading Callback to show loading UI
+     * @param onSuccess Callback when connection succeeds
+     * @param onError Callback when connection fails (receives error message)
+     */
+    public void tryAutoConnect(String folderName, 
+                               Runnable onLoading, 
+                               Runnable onSuccess, 
+                               java.util.function.Consumer<String> onError) {
+        if (!utils.ConfigUtils.hasValidCredentials()) {
+            logger.info("No saved credentials found");
+            onError.accept("NO_CREDENTIALS");
+            return;
+        }
+        
+        logger.info("Found saved credentials, attempting auto-connect...");
+        onLoading.run();
+        
+        SwingWorker<Void, Void> worker = new SwingWorker<>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                String host = utils.ConfigUtils.getImapHost();
+                String email = utils.ConfigUtils.getEmail();
+                String password = utils.ConfigUtils.getAppPassword();
+                
+                // Connect to IMAP
+                connectSync(host, email, password);
+                
+                // Auto-configure SMTP with same credentials
+                controllers.SmtpController smtpController = controllers.SmtpController.getInstance();
+                smtpController.configureFromImap(host, email, password);
+                
+                return null;
+            }
+            
+            @Override
+            protected void done() {
+                try {
+                    get(); // Check for exceptions
+                    
+                    logger.info("Auto-connect successful");
+                    setCurrentFolder(folderName);
+                    loadFolder(folderName, Constants.EMAILS_PER_PAGE);
+                    onSuccess.run();
+                    
+                } catch (Exception e) {
+                    logger.error("Auto-connect failed: {}", e.getMessage(), e);
+                    
+                    String errorMsg = e.getCause() != null ? 
+                                     e.getCause().getMessage() : 
+                                     e.getMessage();
+                    onError.accept(errorMsg);
+                }
+            }
+        };
+        
+        worker.execute();
+    }
+
+    /**
      * Load emails from a specific folder
      */
     public void loadFolder(String folderName, int count) {
@@ -220,6 +285,106 @@ public class ImapController {
                     notifyAllInboxes(emails, currentFolder);
                 } catch (Exception e) {
                     AsyncUtils.showError("refresh", e);
+                }
+            }
+        };
+
+        worker.execute();
+    }
+
+    /**
+     * Search emails trên server
+     * Tìm kiếm trong toàn bộ email (subject, from, body)
+     */
+    /**
+     * Perform search with automatic decision: server search if connected, local filter otherwise
+     * 
+     * @param query Search query
+     * @param folder Folder to search in
+     * @param onSuccess Callback with search results
+     */
+    public void performSearch(String query, String folder, java.util.function.Consumer<List<Email>> onSuccess) {
+        // Empty query - return all cached emails
+        if (query == null || query.trim().isEmpty()) {
+            List<Email> allEmails = getCachedEmails(folder);
+            if (allEmails != null) {
+                onSuccess.accept(allEmails);
+            } else {
+                onSuccess.accept(new ArrayList<>());
+            }
+            logger.debug("Empty search query, returning all cached emails");
+            return;
+        }
+        
+        // Server search if connected
+        if (isConnected()) {
+            logger.info("Performing server search for: '{}'", query);
+            
+            SwingWorker<List<Email>, Void> worker = new SwingWorker<>() {
+                @Override
+                protected List<Email> doInBackground() throws Exception {
+                    return imapService.searchEmails(folder, query);
+                }
+                
+                @Override
+                protected void done() {
+                    try {
+                        List<Email> results = get();
+                        logger.info("Server search found {} results", results.size());
+                        SwingUtilities.invokeLater(() -> onSuccess.accept(results));
+                    } catch (Exception e) {
+                        logger.error("Server search failed: {}", e.getMessage(), e);
+                        AsyncUtils.showError("search emails", e);
+                    }
+                }
+            };
+            
+            worker.execute();
+        } 
+        // Local filter if not connected
+        else {
+            logger.debug("Not connected, performing local search");
+            List<Email> cached = getCachedEmails(folder);
+            if (cached != null) {
+                List<Email> filtered = EmailUtils.filterBySearchQuery(cached, query);
+                onSuccess.accept(filtered);
+            } else {
+                onSuccess.accept(new ArrayList<>());
+            }
+        }
+    }
+    
+    /**
+     * Search emails on server (legacy method, kept for backward compatibility)
+     * 
+     * @param keyword Search keyword
+     * @param requestingInbox The inbox requesting the search
+     * @deprecated Use performSearch() instead for better flexibility
+     */
+    @Deprecated
+    public void searchEmails(String keyword, Inbox requestingInbox) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            // Nếu keyword rỗng, load lại emails bình thường
+            loadFolder(currentFolder, Constants.EMAILS_PER_PAGE);
+            return;
+        }
+        
+        SwingWorker<List<Email>, Void> worker = new SwingWorker<>() {
+            @Override
+            protected List<Email> doInBackground() throws Exception {
+                return imapService.searchEmails(currentFolder, keyword);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    List<Email> emails = get();
+                    // Sử dụng loadSearchResults() để không filter lại local
+                    // (server đã tìm trong body rồi)
+                    SwingUtilities.invokeLater(() -> requestingInbox.loadSearchResults(emails));
+                    logger.debug("Loaded {} search results to UI", emails.size());
+                } catch (Exception e) {
+                    AsyncUtils.showError("search emails", e);
                 }
             }
         };
@@ -364,8 +529,8 @@ public class ImapController {
             }
             
             // Nếu có attachment bị mất, invalidate cache và fetch lại
-            if (!allAttachmentsExist && cachedAttachments != null && !cachedAttachments.isEmpty()) {
-                logger.warn("⚠️ Some attachments missing, invalidating cache and re-fetching message #{}", msgNum);
+            if (!allAttachmentsExist && !cachedAttachments.isEmpty()) {
+                logger.warn("Some attachments missing, invalidating cache and re-fetching message #{}", msgNum);
                 cacheManager.clearMessage(msgNum);
                 // Không return, sẽ fetch từ server ở dưới
             } else {

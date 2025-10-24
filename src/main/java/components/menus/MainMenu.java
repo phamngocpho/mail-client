@@ -219,10 +219,9 @@ public class MainMenu extends JPanel {
 
                     // Load emails khi chuyển tab
                     if (contentPanel instanceof Inbox inbox) {
-                        // Chỉ refresh nếu đã connected
+                        // Chỉ refresh nếu đã connected - gọi qua Inbox để có loading skeleton
                         if (inbox.getController() != null && inbox.getController().isConnected()) {
-                            inbox.getController().setCurrentFolder(inbox.getFolderName());
-                            inbox.getController().loadFolder(inbox.getFolderName(), Constants.EMAILS_PER_PAGE);
+                            inbox.reloadFolder();
                         }
                     }
 
