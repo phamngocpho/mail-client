@@ -179,10 +179,13 @@ public class Inbox extends JPanel {
 
         add(contentPanel, "grow");
         
-        // Create and add loading panel
+        // Create and add loading panel with scroll support
         loadingPanel = new Loading();
         loadingPanel.setVisible(false);
-        contentPanel.add(loadingPanel, "LOADING");
+        JScrollPane loadingScrollPane = new JScrollPane(loadingPanel);
+        loadingScrollPane.setBorder(null);
+        loadingScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        contentPanel.add(loadingScrollPane, "LOADING");
     }
 
     /**
