@@ -27,6 +27,8 @@ public class MainMenu extends JPanel {
     private MenuItem selectedItem;
     private MenuItemClickListener clickListener;
     private JPanel defaultContent;
+    private Compose composePanel;   // Reference to Compose
+    private Drafts localDraftsPanel;   // Reference to Drafts panel
 
     // Interface để xử lý sự kiện click
     public interface MenuItemClickListener {
@@ -40,6 +42,10 @@ public class MainMenu extends JPanel {
     // Setter để MainPanel có thể đăng ký listener
     public void setMenuItemClickListener(MenuItemClickListener listener) {
         this.clickListener = listener;
+
+        if (localDraftsPanel != null) {
+            localDraftsPanel.setMenuItemClickListener(listener);
+        }
 
         if (defaultContent != null) {
             clickListener.onMenuItemClicked(defaultContent);
@@ -97,6 +103,10 @@ public class MainMenu extends JPanel {
     }
 
     private JButton createComposeButton(JPanel composeContent) {
+        // LƯU REFERENCEaddMenuItems
+        if (composeContent instanceof Compose) {
+            this.composePanel = (Compose) composeContent;
+        }
         JButton btn = new JButton("Compose", new FlatSVGIcon("icons/menu/compose.svg", Constants.defaultIconSize, Constants.defaultIconSize));
         btn.setPreferredSize(new Dimension(150, 48));
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
@@ -127,14 +137,21 @@ public class MainMenu extends JPanel {
         JPanel starredContent = new Inbox("INBOX", "STARRED");
         JPanel snoozedContent = new Inbox("[Gmail]/Snoozed", "ALL");
         JPanel sentContent = new Inbox("[Gmail]/Sent Mail", "ALL");
-        JPanel draftsContent = new Inbox("[Gmail]/Drafts", "ALL");
+        localDraftsPanel = new Drafts();  // ← THAY ĐỔI: Dùng Drafts thay vì Inbox
+
+        // Kết nối Compose với Drafts
+        if (composePanel != null) {
+            localDraftsPanel.setComposePanel(composePanel);
+            composePanel.setDraftsPanel(localDraftsPanel);
+            localDraftsPanel.setMenuItemClickListener(this.clickListener);
+        }
         JPanel moreContent = createContentPanel("More Content");
 
         MenuItem inbox = createMenuItem("icons/menu/inbox.svg", "Inbox", true, inboxContent);
         MenuItem starred = createMenuItem("icons/inbox/star_outline.svg", "Starred", false, starredContent);
         MenuItem snoozed = createMenuItem("icons/menu/snoozed.svg", "Snoozed", false, snoozedContent);
         MenuItem sent = createMenuItem("icons/menu/sent.svg", "Sent", false, sentContent);
-        MenuItem drafts = createMenuItem("icons/menu/drafts.svg", "Drafts", false, draftsContent);
+        MenuItem drafts = createMenuItem("icons/menu/drafts.svg", "Drafts", false, localDraftsPanel );
         MenuItem more = createMenuItem("icons/menu/more.svg", "More", false, moreContent);
 
         menuItemsPanel.add(inbox, "wrap, growx");
