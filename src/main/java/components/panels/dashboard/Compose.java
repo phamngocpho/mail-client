@@ -10,8 +10,11 @@ import models.Email;
 import net.miginfocom.swing.MigLayout;
 import raven.toast.Notifications;
 import utils.Constants;
+import utils.HtmlEditorUtils;
+import utils.UIUtils;
 
 import javax.swing.*;
+import javax.swing.text.html.HTMLEditorKit;
 import java.awt.*;
 import java.awt.event.ActionListener;
 import java.io.File;
@@ -32,7 +35,7 @@ import static utils.UIUtils.getFileIcon;
 public class Compose extends JPanel {
     private JTextField toField;
     private JTextField subjectField;
-    private JTextArea bodyArea;
+    private JTextPane bodyArea;
     private JTextField ccField;
     private JTextField bccField;
     private boolean ccVisible = false;
@@ -108,10 +111,18 @@ public class Compose extends JPanel {
         // Spacer to push body area down
         add(new JLabel(), "span,h 1!,wrap");
 
-        // Body area
-        bodyArea = new JTextArea();
-        bodyArea.setLineWrap(true);
-        bodyArea.setWrapStyleWord(true);
+        // Body area with HTML support
+        bodyArea = new JTextPane();
+        bodyArea.setContentType("text/html");
+
+        // Configure HTMLEditorKit using utility class
+        HTMLEditorKit kit = HtmlEditorUtils.createConfiguredEditorKit();
+        bodyArea.setEditorKit(kit);
+        bodyArea.setForeground(UIUtils.getTextColor());
+
+        // Set initial HTML content
+        bodyArea.setText(UIUtils.getHtmlTemplate());
+
         bodyArea.setOpaque(false);
         bodyArea.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Write your message here...");
         bodyArea.setBorder(BorderFactory.createCompoundBorder(
@@ -205,14 +216,14 @@ public class Compose extends JPanel {
     private JPanel createToolbarPanel() {
         JPanel panel = new JPanel(new MigLayout("fillx,insets 12 20 12 20", "[][][][][][][][][grow][]", "[]"));
 
-        panel.add(createToolbarButton("icons/compose/bold.svg", e -> {}));
-        panel.add(createToolbarButton("icons/compose/italic.svg", e -> {}));
-        panel.add(createToolbarButton("icons/compose/align_left.svg", e -> {}));
-        panel.add(createToolbarButton("icons/compose/bullet.svg", e -> {}));
-        panel.add(createToolbarButton("icons/compose/numbered.svg", e -> {}));
-        panel.add(createToolbarButton("icons/compose/image.svg", e -> {}));
-        panel.add(createToolbarButton("icons/compose/edit.svg", e -> {}));
-        panel.add(createToolbarButton("icons/compose/link.svg", e -> {}));
+        panel.add(createToolbarButton("icons/compose/bold.svg", e -> toggleBold()));
+        panel.add(createToolbarButton("icons/compose/italic.svg", e -> toggleItalic()));
+        panel.add(createToolbarButton("icons/compose/align_left.svg", e -> alignLeft()));
+        panel.add(createToolbarButton("icons/compose/bullet.svg", e -> insertBulletList()));
+        panel.add(createToolbarButton("icons/compose/numbered.svg", e -> insertNumberedList()));
+        panel.add(createToolbarButton("icons/compose/image.svg", e -> insertImage()));
+        panel.add(createToolbarButton("icons/compose/edit.svg", e -> clearFormatting()));
+        panel.add(createToolbarButton("icons/compose/link.svg", e -> insertLink()));
         panel.add(createToolbarButton("icons/compose/attach.svg", e -> chooseAttachment()));
 
         panel.add(new JLabel(), "pushx,growx");
@@ -694,6 +705,81 @@ public class Compose extends JPanel {
     private void showError(String message) {
         Notifications.getInstance().show(Notifications.Type.ERROR, message);
     }
+
+    // ========== Text Formatting Methods ==========
+    // Delegate to HtmlEditorUtils for cleaner, more maintainable code
+
+    /**
+     * Toggles bold formatting for the selected text in the body area.
+     */
+    private void toggleBold() {
+        HtmlEditorUtils.toggleBold(bodyArea);
+    }
+
+    /**
+     * Toggles italic formatting for the selected text in the body area.
+     */
+    private void toggleItalic() {
+        HtmlEditorUtils.toggleItalic(bodyArea);
+    }
+
+    /**
+     * Aligns the selected paragraph to the left.
+     */
+    private void alignLeft() {
+        HtmlEditorUtils.alignLeft(bodyArea);
+    }
+
+    /**
+     * Inserts a bullet list at the current cursor position.
+     */
+    private void insertBulletList() {
+        HtmlEditorUtils.insertBulletList(bodyArea);
+    }
+
+    /**
+     * Inserts a numbered list at the current cursor position.
+     */
+    private void insertNumberedList() {
+        HtmlEditorUtils.insertNumberedList(bodyArea);
+    }
+
+    /**
+     * Opens a file chooser to select and insert an image into the email body.
+     */
+    private void insertImage() {
+        JnaFileChooser fileChooser = new JnaFileChooser();
+        fileChooser.addFilter("Image Files", "jpg", "jpeg", "png", "gif", "bmp", "webp");
+        boolean result = fileChooser.showOpenDialog(SwingUtilities.getWindowAncestor(this));
+
+        if (result) {
+            File imageFile = fileChooser.getSelectedFile();
+            HtmlEditorUtils.insertImage(bodyArea, imageFile);
+        }
+    }
+
+    /**
+     * Opens a dialog to insert a hyperlink at the selected text or cursor position.
+     */
+    private void insertLink() {
+        String url = JOptionPane.showInputDialog(this,
+                "Enter URL:",
+                "Insert Link",
+                JOptionPane.PLAIN_MESSAGE);
+
+        if (url != null && !url.trim().isEmpty()) {
+            HtmlEditorUtils.insertLink(bodyArea, url);
+        }
+    }
+
+    /**
+     * Clears all formatting from the selected text.
+     */
+    private void clearFormatting() {
+        HtmlEditorUtils.clearFormatting(bodyArea);
+    }
+
+    // ========== Getters and Setters ==========
 
     public String getTo() {
         return toField.getText();
