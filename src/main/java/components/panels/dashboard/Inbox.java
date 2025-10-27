@@ -19,6 +19,8 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
+import javax.swing.table.TableColumn;
+import javax.swing.table.TableColumnModel;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -326,10 +328,10 @@ public class Inbox extends JPanel {
                                            "Search was performed on ALL emails (not limited to recent 50)." :
                                            "Note: Not connected. Only searched in recently loaded emails."));
                     cardLayout.show(contentPanel, DETAIL_VIEW);
-                } else if (!currentSearchQuery.isEmpty() && !emails.isEmpty()) {
+                } else if (!currentSearchQuery.isEmpty()) {
                     // Có kết quả search - log thông tin
                     logger.info("Found {} email(s) matching: \"{}\"", emails.size(), currentSearchQuery);
-                } else if (currentSearchQuery.isEmpty() && emails.isEmpty()) {
+                } else if (emails.isEmpty()) {
                     // Clear search nhưng không có email nào
                     subjectLabel.setText("<html>No emails found</html>");
                     fromLabel.setText("");
@@ -369,9 +371,7 @@ public class Inbox extends JPanel {
         controller.tryAutoConnect(
             folderName,
             // onLoading - connecting to server
-            () -> {
-                updateLoadingPanel("Connecting to mail server...", "Authenticating with IMAP server");
-            },
+            () -> updateLoadingPanel("Connecting to mail server...", "Authenticating with IMAP server"),
             // onSuccess - connection successful
             () -> {
                 updateLoadingPanel("Loading emails...", "Fetching messages from server");
@@ -451,13 +451,11 @@ public class Inbox extends JPanel {
     private void hideLoadingPanel() {
         if (loadingPanel != null) {
             // Loading component tự quản lý minimum display time
-            loadingPanel.hideWithMinimumDuration(() -> {
-                SwingUtilities.invokeLater(() -> {
-                    if (contentPanel != null && cardLayout != null) {
-                        cardLayout.show(contentPanel, LIST_VIEW);
-                    }
-                });
-            });
+            loadingPanel.hideWithMinimumDuration(() -> SwingUtilities.invokeLater(() -> {
+                if (contentPanel != null && cardLayout != null) {
+                    cardLayout.show(contentPanel, LIST_VIEW);
+                }
+            }));
         }
     }
     
@@ -535,13 +533,18 @@ public class Inbox extends JPanel {
         emailTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
         // Column widths
-        emailTable.getColumnModel().getColumn(0).setMaxWidth(40);  // Checkbox
-        emailTable.getColumnModel().getColumn(0).setHeaderRenderer((jTable, o, b, b1, i, i1) -> new JLabel(selectOutlineIcon));
-        emailTable.getColumnModel().getColumn(1).setMaxWidth(40);  // Star
-        emailTable.getColumnModel().getColumn(1).setHeaderRenderer((jTable, o, b, b1, i, i1) -> new JLabel(starOutlineIcon));
-        emailTable.getColumnModel().getColumn(2).setPreferredWidth(180); // Sender
-        emailTable.getColumnModel().getColumn(3).setPreferredWidth(400); // Subject
-        emailTable.getColumnModel().getColumn(4).setPreferredWidth(80);  // Time
+        TableColumnModel columnModel = emailTable.getColumnModel();
+        TableColumn checkboxColumn = columnModel.getColumn(0);
+        checkboxColumn.setMaxWidth(40);  // Checkbox
+        checkboxColumn.setHeaderRenderer((jTable, o, b, b1, i, i1) -> new JLabel(selectOutlineIcon));
+
+        TableColumn starColumn = columnModel.getColumn(1);
+        starColumn.setMaxWidth(40);  // Star
+        starColumn.setHeaderRenderer((jTable, o, b, b1, i, i1) -> new JLabel(starOutlineIcon));
+
+        columnModel.getColumn(2).setPreferredWidth(180); // Sender
+        columnModel.getColumn(3).setPreferredWidth(400); // Subject
+        columnModel.getColumn(4).setPreferredWidth(80);  // Time
 
         // Custom header
         JTableHeader header = emailTable.getTableHeader();

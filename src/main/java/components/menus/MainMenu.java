@@ -137,7 +137,9 @@ public class MainMenu extends JPanel {
         JPanel starredContent = new Inbox("INBOX", "STARRED");
         JPanel snoozedContent = new Inbox("[Gmail]/Snoozed", "ALL");
         JPanel sentContent = new Inbox("[Gmail]/Sent Mail", "ALL");
-        localDraftsPanel = new Drafts();  // ← THAY ĐỔI: Dùng Drafts thay vì Inbox
+        
+        // Tạo Drafts panel
+        localDraftsPanel = new Drafts();
 
         // Kết nối Compose với Drafts
         if (composePanel != null) {
@@ -145,6 +147,7 @@ public class MainMenu extends JPanel {
             composePanel.setDraftsPanel(localDraftsPanel);
             localDraftsPanel.setMenuItemClickListener(this.clickListener);
         }
+        
         JPanel moreContent = createContentPanel("More Content");
 
         MenuItem inbox = createMenuItem("icons/menu/inbox.svg", "Inbox", true, inboxContent);

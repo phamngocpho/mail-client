@@ -521,6 +521,28 @@ public class ImapClient {
         return 0;
     }
 
+    /**
+     * Sends literal data to IMAP server after receiving continuation response.
+     * Helper method to avoid code duplication.
+     * 
+     * @param literalData the literal data to send
+     * @throws ImapException if continuation response is not received or I/O error occurs
+     */
+    private void sendLiteralData(String literalData) throws ImapException {
+        try {
+            String continuation = reader.readLine();
+            if (continuation != null && continuation.startsWith("+")) {
+                writer.println(literalData);
+                writer.flush();
+                logger.debug("→ {} (literal data)", literalData);
+            } else {
+                throw new ImapException("Expected continuation response, got: " + continuation);
+            }
+        } catch (IOException e) {
+            throw new ImapException("Failed to send literal: " + e.getMessage(), e);
+        }
+    }
+
 
     /**
      * Parse FETCH response thành list emails - CHỈ PARSE HEADERS
@@ -610,7 +632,7 @@ public class ImapClient {
      * Search emails trên server theo keyword
      * Tìm kiếm trong toàn bộ email (subject, from, body)
      * Hỗ trợ tiếng Việt có dấu và khoảng trắng
-     * 
+     *
      * @param keyword từ khóa tìm kiếm
      * @return List message numbers của emails tìm được
      */
@@ -618,34 +640,135 @@ public class ImapClient {
         if (selectedFolder == null) {
             throw new ImapException("No folder selected");
         }
-        
+
         if (keyword == null || keyword.trim().isEmpty()) {
             return new ArrayList<>();
         }
-        
-        String tag = nextTag();
-        
-        // Nếu keyword có ký tự đặc biệt (tiếng Việt, khoảng trắng), dùng CHARSET UTF-8
-        // IMAP SEARCH CHARSET UTF-8 OR OR SUBJECT "keyword" FROM "keyword" BODY "keyword"
-        boolean needsUtf8 = ImapUtils.needsUtf8Encoding(keyword);
-        
-        String quotedKeyword = ImapUtils.quoteImapString(keyword);
-        String command = getCommand(needsUtf8, tag, quotedKeyword);
 
+        String tag = nextTag();
+
+        // Try different search strategies in order
         logger.debug("Searching ENTIRE folder '{}' for: '{}'", selectedFolder, keyword);
-        logger.debug("→ {}", command);
-        sendCommand(command);
-        String response = readFullResponse(tag);
-        
-        if (ImapParser.isError(response, tag)) {
-            // Fallback: thử search đơn giản hơn nếu CHARSET không được hỗ trợ
-            logger.warn("CHARSET UTF-8 search failed, trying simple TEXT search");
-            return searchEmailsSimple(keyword);
+
+        // Strategy 1: Try UTF-8 with proper encoding
+        try {
+            return searchWithUtf8(tag, keyword);
+        } catch (Exception e) {
+            logger.warn("UTF-8 search failed: {}", e.getMessage());
         }
-        
-        List<Integer> results = parseSearchResponse(response);
-        logger.debug("Search completed: found {} emails in ENTIRE folder (not limited to recent emails)", results.size());
-        return results;
+
+        // Strategy 2: Try simple TEXT search
+        try {
+            return searchWithText(keyword);
+        } catch (Exception e) {
+            logger.warn("TEXT search failed: {}", e.getMessage());
+        }
+
+        // Strategy 3: Try individual field searches without OR
+        try {
+            return searchWithIndividualFields(keyword);
+        } catch (Exception e) {
+            logger.error("All search strategies failed for keyword: {}", keyword);
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Search with UTF-8 charset using literal string format
+     */
+    private List<Integer> searchWithUtf8(String tag, String keyword) throws ImapException {
+        // Use literal format for UTF-8 strings: {byte_count}\r\nactual_string
+        byte[] keywordBytes = keyword.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        int byteCount = keywordBytes.length;
+
+        // Send command with literal format
+        String command = String.format("%s SEARCH CHARSET UTF-8 TEXT {%d}", tag, byteCount);
+        logger.debug("→ {} (UTF-8 literal)", command);
+
+        writer.println(command);
+        writer.flush();
+
+        // Wait for continuation response "+" and send literal data
+        sendLiteralData(keyword);
+
+        String response = readFullResponse(tag);
+
+        if (ImapParser.isError(response, tag)) {
+            throw new ImapException("UTF-8 search failed");
+        }
+
+        return parseSearchResponse(response);
+    }
+
+    /**
+     * Simple TEXT search
+     */
+    private List<Integer> searchWithText(String keyword) throws ImapException {
+        String tag = nextTag();
+
+        // Use literal format for TEXT search too
+        byte[] keywordBytes = keyword.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        int byteCount = keywordBytes.length;
+
+        String command = String.format("%s SEARCH TEXT {%d}", tag, byteCount);
+        logger.debug("→ {} (TEXT literal)", command);
+
+        writer.println(command);
+        writer.flush();
+
+        // Wait for continuation response "+" and send literal data
+        sendLiteralData(keyword);
+
+        String response = readFullResponse(tag);
+
+        if (ImapParser.isError(response, tag)) {
+            throw new ImapException("TEXT search failed");
+        }
+
+        return parseSearchResponse(response);
+    }
+
+    /**
+     * Search individual fields (SUBJECT, FROM, BODY) separately and combine results
+     */
+    private List<Integer> searchWithIndividualFields(String keyword) {
+        List<Integer> allResults = new ArrayList<>();
+        String[] fields = {"SUBJECT", "FROM", "BODY"};
+
+        for (String field : fields) {
+            try {
+                String tag = nextTag();
+                byte[] keywordBytes = keyword.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                int byteCount = keywordBytes.length;
+
+                String command = String.format("%s SEARCH %s {%d}", tag, field, byteCount);
+                logger.debug("→ {} (searching {})", command, field);
+
+                writer.println(command);
+                writer.flush();
+
+                // Wait for continuation response "+" and send literal data
+                sendLiteralData(keyword);
+
+                String response = readFullResponse(tag);
+
+                if (!ImapParser.isError(response, tag)) {
+                    List<Integer> fieldResults = parseSearchResponse(response);
+                    // Add unique results only
+                    for (Integer msgNum : fieldResults) {
+                        if (!allResults.contains(msgNum)) {
+                            allResults.add(msgNum);
+                        }
+                    }
+                    logger.debug("Found {} results in {}", fieldResults.size(), field);
+                }
+            } catch (Exception e) {
+                logger.warn("Search in {} failed: {}", field, e.getMessage());
+            }
+        }
+
+        logger.debug("Total unique results from all fields: {}", allResults.size());
+        return allResults;
     }
 
     private static String getCommand(boolean needsUtf8, String tag, String quotedKeyword) {
