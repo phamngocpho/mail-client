@@ -131,22 +131,21 @@ public class Drafts extends JPanel {
         if (composePanel != null) {
             currentDraft = draft;
 
-            // Load draft data into compose panel
+            // ════════════════════════════════════════════════════
+            // CHỈ GỌI loadDraft() - nó sẽ load tất cả (to, cc, subject, body, attachments)
+            // ════════════════════════════════════════════════════
             composePanel.loadDraft(draft);
 
-            if (!draft.getCc().isEmpty()) {
-                composePanel.setCc(String.join(", ", draft.getCc()));
-            }
+            // ════════════════════════════════════════════════════
+            // CHUYỂN SANG COMPOSE PANEL
+            // ════════════════════════════════════════════════════
             if (menuItemClickListener != null) {
                 menuItemClickListener.onMenuItemClicked(composePanel);
             }
 
-            // Load attachments if any
-            for (java.io.File file : draft.getAttachments()) {
-                composePanel.addAttachment(file);
-            }
-
-            // Switch to compose panel (implementation depends on your layout)
+            // ════════════════════════════════════════════════════
+            // HIỂN THỊ NOTIFICATION (optional - có thể bỏ)
+            // ════════════════════════════════════════════════════
             Notifications.getInstance().show(Notifications.Type.INFO, "Editing draft");
         }
     }

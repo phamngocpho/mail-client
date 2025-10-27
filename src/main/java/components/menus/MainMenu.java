@@ -232,6 +232,9 @@ public class MainMenu extends JPanel {
             addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
+                    if (composePanel != null && composePanel.isVisible()) {
+                        composePanel.saveDraftBeforeSwitching();
+                    }
                     setSelected(true);
 
                     // Load emails khi chuyển tab
@@ -290,4 +293,5 @@ public class MainMenu extends JPanel {
             repaint();
         }
     }
+
 }

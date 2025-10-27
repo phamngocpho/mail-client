@@ -41,7 +41,6 @@ public class Compose extends JPanel {
     private boolean ccVisible = false;
     private boolean bccVisible = false;
     private JPanel attachmentPanel;
-    private Timer autoSaveTimer;
     private String currentDraftId;
     private Drafts draftsPanel;
 
@@ -65,7 +64,6 @@ public class Compose extends JPanel {
             }
         });
         init();
-        setupAutoSave();
     }
 
     private void init() {
@@ -142,6 +140,16 @@ public class Compose extends JPanel {
         // Bottom toolbar
         add(createToolbarPanel(), "span,growx,h 60!");
         setBorder(BorderFactory.createMatteBorder(0, 2, 0, 0, Constants.dark_gray));
+
+        addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentHidden(java.awt.event.ComponentEvent e) {
+                // User chuyển sang tab khác
+                if (hasContent()) {
+                    saveDraftSilently();
+                }
+            }
+        });
     }
 
     private JTextField createTextField(String placeholder) {
@@ -642,15 +650,6 @@ public class Compose extends JPanel {
         }
     }
 
-    private void setupAutoSave() {
-        autoSaveTimer = new Timer(3000, e -> {
-            if (hasContent()) {
-                saveDraft();
-            }
-        });
-        autoSaveTimer.setRepeats(true);
-        autoSaveTimer.start();
-    }
     private boolean hasContent() {
         return !toField.getText().trim().isEmpty() ||
                 !subjectField.getText().trim().isEmpty() ||
@@ -838,6 +837,35 @@ public class Compose extends JPanel {
             SwingUtilities.invokeLater(() -> {
                 draftsPanel.refresh();
             });
+        }
+    }
+    private void saveDraftSilently() {
+        if (!hasContent()) {
+            return;
+        }
+
+        Email draft = createEmail();
+
+        if (currentDraftId != null) {
+            draft.setMessageId(currentDraftId);
+        }
+
+        DraftsController controller = DraftsController.getInstance();
+        if (controller.saveDraft(draft)) {
+            currentDraftId = draft.getMessageId();
+
+            // ════════════════════════════════════════════════════
+            // KHÔNG hiển thị notification to
+            // Chỉ log để debug
+            // ════════════════════════════════════════════════════
+            System.out.println("Draft auto-saved when switching tab");
+
+            refreshDraftsPanel();
+        }
+    }
+    public void saveDraftBeforeSwitching() {
+        if (hasContent()) {
+            saveDraftSilently();
         }
     }
 
