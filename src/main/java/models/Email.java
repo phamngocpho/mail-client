@@ -1,6 +1,7 @@
 package models;
 
 import java.io.File;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -10,7 +11,8 @@ import java.util.List;
  * and attachments. This class provides methods for constructing an email, modifying its properties,
  * and managing its metadata.
  */
-public class Email {
+public class Email implements Serializable {
+    private static final long serialVersionUID = 1L;
     private int messageNumber;
     private String messageId;
     private long uid = 0;

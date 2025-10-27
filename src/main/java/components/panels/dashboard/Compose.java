@@ -3,6 +3,7 @@ import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 import com.formdev.flatlaf.themes.FlatMacDarkLaf;
 import com.formdev.flatlaf.ui.FlatLineBorder;
+import controllers.DraftsController;
 import controllers.SmtpController;
 import jnafilechooser.api.JnaFileChooser;
 import models.Email;
@@ -40,6 +41,9 @@ public class Compose extends JPanel {
     private boolean ccVisible = false;
     private boolean bccVisible = false;
     private JPanel attachmentPanel;
+    private Timer autoSaveTimer;
+    private String currentDraftId;
+    private Drafts draftsPanel;
 
     private final List<File> attachments = new ArrayList<>();
     private final int iconSize = Constants.defaultIconSize - 3;
@@ -61,6 +65,7 @@ public class Compose extends JPanel {
             }
         });
         init();
+        setupAutoSave();
     }
 
     private void init() {
@@ -366,6 +371,11 @@ public class Compose extends JPanel {
                     boolean success = get();
                     if (success) {
                         Notifications.getInstance().show(Notifications.Type.SUCCESS, "Email sent successfully!");
+                        // XÓA DRAFT SAU KHI GỬI THÀNH CÔNG
+                        if (currentDraftId != null) {
+                            DraftsController.getInstance().deleteDraftAfterSend(currentDraftId);
+                            currentDraftId = null;
+                        }
                         clearForm();
                     } else {
                         showError("Failed to send email. Please check your connection.");
@@ -632,6 +642,66 @@ public class Compose extends JPanel {
         }
     }
 
+    private void setupAutoSave() {
+        autoSaveTimer = new Timer(3000, e -> {
+            if (hasContent()) {
+                saveDraft();
+            }
+        });
+        autoSaveTimer.setRepeats(true);
+        autoSaveTimer.start();
+    }
+    private boolean hasContent() {
+        return !toField.getText().trim().isEmpty() ||
+                !subjectField.getText().trim().isEmpty() ||
+                !bodyArea.getText().trim().isEmpty();
+    }
+
+    public void saveDraft() {
+        if (!hasContent()) {
+            return;
+        }
+
+        Email draft = createEmail();
+
+        // Giữ nguyên draft ID nếu đang edit draft cũ
+        if (currentDraftId != null) {
+            draft.setMessageId(currentDraftId);
+        }
+
+        DraftsController controller = DraftsController.getInstance();
+        if (controller.saveDraft(draft)) {
+            currentDraftId = draft.getMessageId();
+            Notifications.getInstance().show(
+                    Notifications.Type.INFO,
+                    "Draft saved"
+            );
+            refreshDraftsPanel();
+        }
+    }
+    public void loadDraft(Email draft) {
+        currentDraftId = draft.getMessageId();
+
+        setTo(String.join(", ", draft.getTo()));
+        setSubject(draft.getSubject());
+        setBody(draft.getBody());
+
+        if (!draft.getCc().isEmpty()) {
+            setCc(String.join(", ", draft.getCc()));
+        }
+
+        if (!draft.getCc().isEmpty()) {
+            if (!ccVisible) {
+                toggleCc();  // Hiển thị CC field
+            }
+            setCc(String.join(", ", draft.getCc()));
+        }
+
+        for (File file : draft.getAttachments()) {
+            addAttachment(file);
+        }
+    }
+
     private void showError(String message) {
         Notifications.getInstance().show(Notifications.Type.ERROR, message);
     }
@@ -758,6 +828,16 @@ public class Compose extends JPanel {
             addAttachmentToPanel(file);
             revalidate();
             repaint();
+        }
+    }
+    public void setDraftsPanel(Drafts draftsPanel) {
+        this.draftsPanel = draftsPanel;
+    }
+    private void refreshDraftsPanel() {
+        if (draftsPanel != null) {
+            SwingUtilities.invokeLater(() -> {
+                draftsPanel.refresh();
+            });
         }
     }
 
