@@ -54,9 +54,9 @@
     <!-- Logger riêng cho package -->
     <logger name="controllers" level="INFO" />
     <logger name="services" level="INFO" />
-    <logger name="protocols.imap" level="INFO" />
+    <logger name="protocols.imap" level="DEBUG" />
     <logger name="components" level="INFO" />
-    <logger name="components.panels.dashboard.Inbox" level="INFO" />
+    <logger name="components.panels.dashboard.Inbox" level="DEBUG" />
     <logger name="utils" level="INFO" />
 
     <!-- Tắt log verbose của thư viện bên ngoài -->

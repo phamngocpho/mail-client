@@ -247,20 +247,17 @@ public class Welcome extends JPanel {
         
         // Title
         JLabel titleLabel = new JLabel(slide.title);
-        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 34f));
         titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
         contentPanel.add(titleLabel, "wrap, alignx center");
         
         // Subtitle
         JLabel subtitleLabel = new JLabel(slide.subtitle);
-        subtitleLabel.setFont(subtitleLabel.getFont().deriveFont(Font.PLAIN, 16f));
         subtitleLabel.setForeground(new Color(156, 163, 175));
         subtitleLabel.setHorizontalAlignment(SwingConstants.CENTER);
         contentPanel.add(subtitleLabel, "wrap, alignx center");
         
         // Description
         JLabel descLabel = new JLabel(slide.description);
-        descLabel.setFont(descLabel.getFont().deriveFont(Font.PLAIN, 14f));
         descLabel.setForeground(new Color(156, 163, 175));
         descLabel.setHorizontalAlignment(SwingConstants.CENTER);
         contentPanel.add(descLabel, "wrap, alignx center, width 650!");
@@ -296,7 +293,6 @@ public class Welcome extends JPanel {
 
             // Add feature text
             JLabel featureLabel = new JLabel(feature);
-            featureLabel.setFont(featureLabel.getFont().deriveFont(Font.PLAIN, 14f));
             featureLabel.setForeground(new Color(200, 200, 200));
             featureRow.add(featureLabel);
 
@@ -315,7 +311,6 @@ public class Welcome extends JPanel {
         } catch (Exception e) {
             // Fallback to text if icon not found
             checkIconLabel.setText("✓");
-            checkIconLabel.setFont(checkIconLabel.getFont().deriveFont(Font.BOLD, 14f));
             checkIconLabel.setForeground(new Color(34, 197, 94));
         }
         return checkIconLabel;
@@ -339,7 +334,6 @@ public class Welcome extends JPanel {
             logger.error("Error loading icon: {}", slide.iconPath, e);
             // Fallback to colored circle
             label.setText("●");
-            label.setFont(label.getFont().deriveFont(100f));
             label.setForeground(Color.WHITE);
         }
         
@@ -374,7 +368,6 @@ public class Welcome extends JPanel {
             } catch (Exception e) {
                 // Fallback to text dots if icons don't load
                 dot.setText("●");
-                dot.setFont(dot.getFont().deriveFont(16f));
             }
             
             // Add dot với constraint, không wrap ở dot cuối

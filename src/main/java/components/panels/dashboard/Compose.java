@@ -818,7 +818,38 @@ public class Compose extends JPanel {
     }
 
     public void setBody(String body) {
-        bodyArea.setText(body);
+        // Handle null or empty body
+        if (body == null || body.trim().isEmpty()) {
+            bodyArea.setText(UIUtils.getHtmlTemplate());
+            return;
+        }
+
+        // Check if the body is already complete HTML document
+        if (body.trim().startsWith("<html>")) {
+            bodyArea.setText(body);
+            return;
+        }
+
+        // Escape HTML special characters to prevent unwanted HTML rendering
+        String htmlBody = body.replace("&", "&amp;")
+                             .replace("<", "&lt;")
+                             .replace(">", "&gt;")
+                             .replace("\"", "&quot;")
+                             .replace("'", "&#39;");
+
+        // Convert plain text newlines to HTML line breaks
+        htmlBody = htmlBody.replace("\n", "<br>");
+
+        // Use the HTML template for consistent styling
+        Color textColor = UIUtils.getTextColor();
+        String colorHex = UIUtils.colorToHex(textColor);
+        int fontSize = Constants.systemFont.getSize();
+
+        String styledHtml = String.format(
+            "<html><body style='color: %s; font-size: %dpx; line-height: 1.5; margin: 0; padding: 0;'>%s</body></html>",
+            colorHex, fontSize, htmlBody
+        );
+        bodyArea.setText(styledHtml);
     }
 
     public void addAttachment(File file) {
@@ -834,9 +865,7 @@ public class Compose extends JPanel {
     }
     private void refreshDraftsPanel() {
         if (draftsPanel != null) {
-            SwingUtilities.invokeLater(() -> {
-                draftsPanel.refresh();
-            });
+            SwingUtilities.invokeLater(() -> draftsPanel.refresh());
         }
     }
     private void saveDraftSilently() {

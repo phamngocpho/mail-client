@@ -62,7 +62,6 @@ public class Drafts extends JPanel {
         panel.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Constants.dark_gray));
 
         JLabel titleLabel = new JLabel("Drafts");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
 
         JButton refreshBtn = new JButton("Refresh");
         refreshBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, "roundRect");

@@ -472,14 +472,21 @@ public class ImapParser {
         String emailContent = response.substring(contentStart, contentEnd);
         String boundary = detectBoundary(emailContent);
 
+        logger.debug("Email content length: {} chars", emailContent.length());
+        logger.debug("Boundary detected: {}", boundary);
+        logger.debug("Email content sample (first 200 chars): {}",
+            emailContent.substring(0, Math.min(200, emailContent.length())));
+
         if (boundary == null) {
             // Email đơn giản không có multipart
+            logger.debug("No boundary found - treating as simple email");
             if (emailContent.toLowerCase().contains("text/html")) {
                 body.html = extractSimpleContent(emailContent);
                 body.plainText = htmlToPlainText(body.html);
             } else {
                 body.plainText = extractSimpleContent(emailContent);
             }
+            logger.debug("Extracted plain text: {} chars", body.plainText.length());
             return body;
         }
 
@@ -822,17 +829,33 @@ public class ImapParser {
 
             switch (encoding.toLowerCase().trim()) {
                 case "base64":
-                    StringBuilder cleanBase64 = new StringBuilder(
-                            content.replaceAll("[\\r\\n]+", "").replaceAll("\\s+", "")
-                    );
-                    while (cleanBase64.length() % 4 != 0) {
-                        cleanBase64.append("=");
-                    }
-                    if (EncodingUtils.isValidBase64(cleanBase64.toString())) {
+                    try {
+                        // Clean up base64 content - keep ONLY valid base64 characters: A-Z, a-z, 0-9, +, /, =
+                        StringBuilder cleanBase64 = new StringBuilder(content.replaceAll("[^A-Za-z0-9+/=]", ""));
+
+                        // Remove any null bytes or special characters that might have slipped through
+                        cleanBase64 = new StringBuilder(cleanBase64.toString().replaceAll("\\x00", ""));
+
+                        // Pad if necessary to make length multiple of 4
+                        while (cleanBase64.length() % 4 != 0) {
+                            cleanBase64.append("=");
+                        }
+
+                        logger.debug("Attempting to decode base64: {} chars (cleaned from {} chars)",
+                            cleanBase64.length(), content.length());
+
+                        // Always try to decode, even if validation fails
                         byte[] decodedBytes = Base64.getDecoder().decode(cleanBase64.toString());
-                        return new String(decodedBytes, charset);
+                        String result = new String(decodedBytes, charset);
+                        logger.debug("Successfully decoded base64 to: {} chars", result.length());
+                        return result;
+                    } catch (IllegalArgumentException e) {
+                        logger.error("Failed to decode base64 content: {}", e.getMessage());
+                        logger.debug("Base64 content sample (first 100 chars): {}",
+                            content.substring(0, Math.min(100, content.length())));
+                        // Return original content if decode fails completely
+                        return content.trim();
                     }
-                    break;
 
                 case "quoted-printable":
                     logger.debug("Before QP decode: {} chars", content.length());

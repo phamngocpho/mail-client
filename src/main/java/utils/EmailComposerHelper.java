@@ -105,8 +105,49 @@ public class EmailComposerHelper {
         body.append("Subject: ").append(email.getSubject() != null ? email.getSubject() : "(No Subject)").append("\n");
         body.append("\n");
         
-        // Add original body
+        // Add original body - strip HTML tags if present to get plain text
         String originalBody = email.getBody() != null ? email.getBody() : "";
+
+        // If body contains HTML, strip tags and convert to plain text
+        if (originalBody.trim().startsWith("<html>") || originalBody.contains("<body>")) {
+            // First, remove script and style content completely
+            originalBody = originalBody.replaceAll("(?i)<script[^>]*>.*?</script>", "");
+            originalBody = originalBody.replaceAll("(?i)<style[^>]*>.*?</style>", "");
+
+            // Replace <br> and <p> tags with newlines before stripping other tags
+            originalBody = originalBody.replaceAll("(?i)<br\\s*/?>", "\n");
+            originalBody = originalBody.replaceAll("(?i)<p[^>]*>", "\n");
+            originalBody = originalBody.replaceAll("(?i)</p>", "\n");
+            originalBody = originalBody.replaceAll("(?i)<div[^>]*>", "\n");
+            originalBody = originalBody.replaceAll("(?i)</div>", "\n");
+
+            // Remove all remaining HTML tags
+            originalBody = originalBody.replaceAll("<[^>]+>", "");
+
+            // Decode common HTML entities
+            originalBody = originalBody.replace("&nbsp;", " ")
+                                     .replace("&lt;", "<")
+                                     .replace("&gt;", ">")
+                                     .replace("&amp;", "&")
+                                     .replace("&quot;", "\"")
+                                     .replace("&#39;", "'")
+                                     .replace("&apos;", "'");
+
+            // Clean up multiple newlines
+            originalBody = originalBody.replaceAll("\n{3,}", "\n\n");
+
+            // Trim whitespace from each line
+            String[] lines = originalBody.split("\n");
+            StringBuilder cleaned = new StringBuilder();
+            for (String line : lines) {
+                String trimmed = line.trim();
+                if (!trimmed.isEmpty()) {
+                    cleaned.append(trimmed).append("\n");
+                }
+            }
+            originalBody = cleaned.toString().trim();
+        }
+
         body.append(originalBody);
         
         return body.toString();
