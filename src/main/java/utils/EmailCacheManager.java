@@ -205,7 +205,7 @@ public class EmailCacheManager {
     }
     
     /**
-     * Clear toàn bộ cache
+     * Clear toàn bộ cache (chỉ xóa nội dung, giữ lại structure)
      */
     public void clearAll() {
         bodyCache.clear();
@@ -213,6 +213,52 @@ public class EmailCacheManager {
         attachmentsCache.clear();
         saveToDisk();
         logger.info("Cleared all email cache");
+    }
+    
+    /**
+     * Xóa toàn bộ cache bao gồm cả files và directories
+     * Sử dụng cho Settings -> Clear Cache
+     */
+    public void deleteAllCacheFiles() {
+        try {
+            // Clear in-memory cache
+            bodyCache.clear();
+            bodyHtmlCache.clear();
+            attachmentsCache.clear();
+            
+            // Lấy parent directory (.mailclient)
+            Path mailclientDir = cacheDir.getParent();
+            
+            // Xóa toàn bộ thư mục .mailclient recursively
+            if (mailclientDir != null && Files.exists(mailclientDir)) {
+                deleteDirectoryRecursively(mailclientDir);
+                logger.info("Deleted entire cache directory: {}", mailclientDir);
+            }
+            
+        } catch (Exception e) {
+            logger.error("Error deleting cache files: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to delete cache files", e);
+        }
+    }
+    
+    /**
+     * Xóa directory recursively
+     */
+    private void deleteDirectoryRecursively(Path directory) throws IOException {
+        if (!Files.exists(directory)) {
+            return;
+        }
+        
+        Files.walk(directory)
+            .sorted((a, b) -> b.compareTo(a)) // Reverse order to delete files before directories
+            .forEach(path -> {
+                try {
+                    Files.delete(path);
+                    logger.debug("Deleted: {}", path);
+                } catch (IOException e) {
+                    logger.warn("Failed to delete {}: {}", path, e.getMessage());
+                }
+            });
     }
     
     /**
