@@ -106,6 +106,17 @@ public class Inbox extends JPanel {
     private static ImapController sharedController; // Controller dùng chung
     private final String folderName;
     private final String filterMode;
+    
+    /**
+     * Reset shared controller (for logout)
+     */
+    public static void resetSharedController() {
+        if (sharedController != null) {
+            sharedController.disconnect();
+            sharedController = null;
+            logger.info("Shared IMAP controller has been reset");
+        }
+    }
 
     public Inbox(String folderName) {
         this(folderName, "ALL");

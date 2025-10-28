@@ -43,6 +43,20 @@ public class SmtpController {
         }
         return instance;
     }
+    
+    /**
+     * Reset instance (for logout)
+     */
+    public static void resetInstance() {
+        if (instance != null) {
+            instance.isConfigured = false;
+            instance.smtpHost = null;
+            instance.username = null;
+            instance.password = null;
+            instance = null;
+            logger.info("SMTP controller has been reset");
+        }
+    }
 
     /**
      * Configures SMTP settings based on the provided IMAP server, username, and password.

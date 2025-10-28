@@ -154,4 +154,34 @@ public class ConfigUtils {
                !getAppPassword().isEmpty() && 
                !getImapHost().isEmpty();
     }
+    
+    /**
+     * Clear all login credentials (logout)
+     * Deletes the local.properties file
+     */
+    public static void clearCredentials() {
+        try {
+            Path resourcesPath = getResourcesPath();
+            if (resourcesPath == null) {
+                throw new IOException("Cannot determine resources path");
+            }
+            
+            Path configFilePath = resourcesPath.resolve("local.properties");
+            
+            // Delete the file if it exists
+            if (Files.exists(configFilePath)) {
+                Files.delete(configFilePath);
+                logger.info("Deleted login credentials file: {}", configFilePath);
+            }
+            
+            // Clear in-memory properties
+            properties.clear();
+            loaded = false;
+            
+            logger.info("Cleared all login credentials");
+        } catch (Exception e) {
+            logger.error("Error clearing login credentials: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to clear credentials", e);
+        }
+    }
 }

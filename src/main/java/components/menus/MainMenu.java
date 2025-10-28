@@ -137,7 +137,7 @@ public class MainMenu extends JPanel {
         JPanel starredContent = new Inbox("INBOX", "STARRED");
         JPanel snoozedContent = new Inbox("[Gmail]/Snoozed", "ALL");
         JPanel sentContent = new Inbox("[Gmail]/Sent Mail", "ALL");
-        
+
         // Tạo Drafts panel
         localDraftsPanel = new Drafts();
 
@@ -147,22 +147,22 @@ public class MainMenu extends JPanel {
             composePanel.setDraftsPanel(localDraftsPanel);
             localDraftsPanel.setMenuItemClickListener(this.clickListener);
         }
-        
-        JPanel moreContent = createContentPanel("More Content");
+
+        JPanel settingsContent = new Settings();
 
         MenuItem inbox = createMenuItem("icons/menu/inbox.svg", "Inbox", true, inboxContent);
         MenuItem starred = createMenuItem("icons/inbox/star_outline.svg", "Starred", false, starredContent);
         MenuItem snoozed = createMenuItem("icons/menu/snoozed.svg", "Snoozed", false, snoozedContent);
         MenuItem sent = createMenuItem("icons/menu/sent.svg", "Sent", false, sentContent);
         MenuItem drafts = createMenuItem("icons/menu/drafts.svg", "Drafts", false, localDraftsPanel );
-        MenuItem more = createMenuItem("icons/menu/more.svg", "More", false, moreContent);
+        MenuItem settings = createMenuItem("icons/menu/settings.svg", "Settings", false, settingsContent);
 
         menuItemsPanel.add(inbox, "wrap, growx");
         menuItemsPanel.add(starred, "wrap, growx");
         menuItemsPanel.add(snoozed, "wrap, growx");
         menuItemsPanel.add(sent, "wrap, growx");
         menuItemsPanel.add(drafts, "wrap, growx");
-        menuItemsPanel.add(more, "wrap, growx");
+        menuItemsPanel.add(settings, "wrap, growx");
 
         selectedItem = inbox;
         defaultContent = inboxContent;
@@ -235,9 +235,6 @@ public class MainMenu extends JPanel {
             addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
-                    if (composePanel != null && composePanel.isVisible()) {
-                        composePanel.saveDraftBeforeSwitching();
-                    }
                     setSelected(true);
 
                     // Load emails khi chuyển tab
@@ -296,5 +293,4 @@ public class MainMenu extends JPanel {
             repaint();
         }
     }
-
 }
