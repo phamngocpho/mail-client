@@ -18,10 +18,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * The ImapController class is responsible for managing the interaction between
@@ -115,16 +112,29 @@ public class ImapController {
     /**
      * Connect to IMAP server và load emails (synchronous version)
      * Dùng khi gọi từ background thread
+     * 
+     * @param loadEmailsImmediately nếu false, không load emails ngay mà để caller quyết định khi nào load
      */
-    public void connectSync(String host, String email, String password) throws Exception {
+    public void connectSync(String host, String email, String password, boolean loadEmailsImmediately) throws Exception {
         // Connect to IMAP
         imapService.connect(host, email, password);
 
-        // Fetch emails from INBOX
-        List<Email> emails = imapService.fetchRecentEmails(currentFolder, Constants.EMAILS_PER_PAGE);
+        if (loadEmailsImmediately) {
+            // Fetch emails from INBOX
+            List<Email> emails = imapService.fetchRecentEmails(currentFolder, Constants.EMAILS_PER_PAGE);
 
-        // Update UI on EDT
-        notifyAllInboxes(emails, currentFolder);
+            // Update UI on EDT
+            notifyAllInboxes(emails, currentFolder);
+        }
+        // Nếu không load emails ngay, caller sẽ gọi loadFolder() sau khi ready
+    }
+    
+    /**
+     * Connect to IMAP server (synchronous version) - backward compatibility
+     * Loads emails immediately
+     */
+    public void connectSync(String host, String email, String password) throws Exception {
+        connectSync(host, email, password, true);
     }
 
     /**
@@ -191,8 +201,9 @@ public class ImapController {
                 String email = utils.ConfigUtils.getEmail();
                 String password = utils.ConfigUtils.getAppPassword();
                 
-                // Connect to IMAP
-                connectSync(host, email, password);
+                // Connect to IMAP - KHÔNG load emails ngay
+                // Emails sẽ được load sau khi thông báo "Connected successfully!" hiện ra
+                connectSync(host, email, password, false);
                 
                 // Auto-configure SMTP with same credentials
                 controllers.SmtpController smtpController = controllers.SmtpController.getInstance();
@@ -208,7 +219,6 @@ public class ImapController {
                     
                     logger.info("Auto-connect successful");
                     setCurrentFolder(folderName);
-                    loadFolder(folderName, Constants.EMAILS_PER_PAGE);
                     onSuccess.run();
                     
                 } catch (Exception e) {
@@ -293,10 +303,6 @@ public class ImapController {
     }
 
     /**
-     * Search emails trên server
-     * Tìm kiếm trong toàn bộ email (subject, from, body)
-     */
-    /**
      * Perform search with automatic decision: server search if connected, local filter otherwise
      * 
      * @param query Search query
@@ -307,11 +313,7 @@ public class ImapController {
         // Empty query - return all cached emails
         if (query == null || query.trim().isEmpty()) {
             List<Email> allEmails = getCachedEmails(folder);
-            if (allEmails != null) {
-                onSuccess.accept(allEmails);
-            } else {
-                onSuccess.accept(new ArrayList<>());
-            }
+            onSuccess.accept(Objects.requireNonNullElseGet(allEmails, ArrayList::new));
             logger.debug("Empty search query, returning all cached emails");
             return;
         }
@@ -454,8 +456,13 @@ public class ImapController {
                 } else {
                     email.removeFlag("Seen");
                 }
-                // Refresh UI
-                inboxPanel.refreshEmailRow(email);
+                // Refresh UI - dùng registeredInboxes thay vì inboxPanel (có thể null)
+                // Chỉ refresh inbox hiển thị folder hiện tại
+                for (Inbox inbox : registeredInboxes) {
+                    if (inbox.getFolderName().equals(currentFolder)) {
+                        SwingUtilities.invokeLater(() -> inbox.refreshEmailRow(email));
+                    }
+                }
             },
             e -> AsyncUtils.showError("mark as read", e)
         );
@@ -500,7 +507,7 @@ public class ImapController {
     public void loadEmailBody(Email email, String folderName) {
         int msgNum = email.getMessageNumber();
         
-        // Kiểm tra cache trước (từ disk)
+        // Kiểm tra cache
         if (cacheManager.hasBody(msgNum)) {
             logger.info("Using cached body from disk for message #{}", msgNum);
             
