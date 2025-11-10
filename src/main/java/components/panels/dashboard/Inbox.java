@@ -88,6 +88,7 @@ public class Inbox extends JPanel {
     private List<Email> allEmails; // Danh sách email gốc (trước khi search)
     private Email currentViewingEmail; // Email đang được xem trong detail view
     private String currentSearchQuery = ""; // Query tìm kiếm hiện tại
+    private boolean waitingForConnectionNotification = false; // Flag để biết có đang chờ show notification không
 
     // Star icons
     private FlatSVGIcon starFilledIcon;
@@ -362,11 +363,18 @@ public class Inbox extends JPanel {
     public void refreshEmailRow(Email email) {
         int index = emails.indexOf(email);
         if (index >= 0) {
-            tableModel.setValueAt(
-                    email.hasFlag("Seen") ? EmailUtils.extractName(email.getFrom()) :
-                            "<html><b>" + EmailUtils.extractName(email.getFrom()) + "</b></html>",
-                    index, 2
-            );
+            boolean isRead = email.hasFlag("Seen");
+            
+            // Update sender column (column 2)
+            String sender = email.getFrom() != null ? EmailUtils.extractName(email.getFrom()) : "Unknown";
+            String senderDisplay = isRead ? sender : "<html><b>" + sender + "</b></html>";
+            tableModel.setValueAt(senderDisplay, index, 2);
+            
+            // Update subject column (column 3) - cũng cần remove bold nếu đã đọc
+            String subject = email.getSubject() != null ? email.getSubject() : "(No Subject)";
+            String subjectDisplay = isRead ? subject : "<html><b>" + subject + "</b></html>";
+            tableModel.setValueAt(subjectDisplay, index, 3);
+            
             tableModel.fireTableRowsUpdated(index, index);
         }
     }
@@ -386,13 +394,14 @@ public class Inbox extends JPanel {
             // onSuccess - connection successful
             () -> {
                 updateLoadingPanel("Loading emails...", "Fetching messages from server");
-                // Hide loading panel after a short delay (to show the final message)
-                Timer hideTimer = new Timer(800, e -> {
-                    hideLoadingPanel();
-                    Notifications.getInstance().show(Notifications.Type.SUCCESS, "Connected successfully!");
+                waitingForConnectionNotification = true;
+                
+                // Đảm bảo connection đã fully ready trước khi user có thể click vào email
+                SwingUtilities.invokeLater(() -> {
+                    controller.setCurrentFolder(folderName);
+                    controller.loadFolder(folderName, Constants.EMAILS_PER_PAGE);
+                    // Notification được show trong loadEmails() sau khi emails được load xong
                 });
-                hideTimer.setRepeats(false);
-                hideTimer.start();
             },
             // onError - connection failed
             (errorMsg) -> {
@@ -416,13 +425,6 @@ public class Inbox extends JPanel {
                 }
             }
         );
-    }
-    
-    /**
-     * Show loading panel with message
-     */
-    private void showLoadingPanel(String message) {
-        showLoadingPanel(message, "Please wait...");
     }
     
     /**
@@ -460,11 +462,15 @@ public class Inbox extends JPanel {
      * Loading component tự động áp dụng minimum display time để tránh nhấp nháy
      */
     private void hideLoadingPanel() {
-        if (loadingPanel != null) {
+        if (loadingPanel != null && loadingPanel.isVisible()) {
             // Loading component tự quản lý minimum display time
             loadingPanel.hideWithMinimumDuration(() -> SwingUtilities.invokeLater(() -> {
                 if (contentPanel != null && cardLayout != null) {
-                    cardLayout.show(contentPanel, LIST_VIEW);
+                    // Chỉ chuyển về LIST_VIEW nếu không có email nào đang được xem
+                    // (tránh làm gián đoạn khi user đang đọc email)
+                    if (currentViewingEmail == null) {
+                        cardLayout.show(contentPanel, LIST_VIEW);
+                    }
                 }
             }));
         }
@@ -476,6 +482,11 @@ public class Inbox extends JPanel {
      */
     public void reloadFolder() {
         if (controller != null && controller.isConnected()) {
+            // Quay về list view trước khi reload
+            currentViewingEmail = null;
+            cardLayout.show(contentPanel, LIST_VIEW);
+            emailTable.clearSelection();
+            
             // Show loading skeleton
             showLoadingPanel("Loading " + folderName + "...", "Fetching messages");
             // Update current folder và load
@@ -594,7 +605,6 @@ public class Inbox extends JPanel {
                 else if (SwingUtilities.isLeftMouseButton(e) && row >= 0 && row < emails.size()) {
                     emailTable.setRowSelectionInterval(row, row);
                     showEmailDetail(row);
-                    cardLayout.show(contentPanel, DETAIL_VIEW);
                 }
             }
         });
@@ -906,6 +916,9 @@ public class Inbox extends JPanel {
 
         Email email = emails.get(row);
         this.currentViewingEmail = email; // Lưu email đang xem
+        
+        // Tránh việc loading panel che mất detail view
+        cardLayout.show(contentPanel, DETAIL_VIEW);
 
         String subject = email.getSubject() != null ? email.getSubject() : "(No Subject)";
         subjectLabel.setText("<html>" + subject + "</html>");
@@ -919,8 +932,13 @@ public class Inbox extends JPanel {
         // Load body
         if (email.getBody() == null || email.getBody().isEmpty()) {
             bodyTextArea.setText("Loading email content...");
+            // Kiểm tra connection trước khi load body
             if (controller != null && controller.isConnected()) {
                 controller.loadEmailBody(email, folderName);
+            } else {
+                // Nếu chưa connected, hiển thị thông báo
+                bodyTextArea.setText("Not connected to server. Please connect first to load email content.");
+                logger.warn("Cannot load email body: not connected to server");
             }
         } else {
             // Ưu tiên HTML body (format tốt hơn), nếu không có thì dùng plain text
@@ -937,7 +955,7 @@ public class Inbox extends JPanel {
             bodyTextArea.setText(displayBody);
             bodyTextArea.setCaretPosition(0);
             
-            // Debug: Log kích thước khi set text (sau một chút để layout hoàn tất)
+            // Log kích thước khi set text (sau một chút để layout hoàn tất)
             final String finalDisplayBody = displayBody;
             SwingUtilities.invokeLater(() -> {
                 logger.debug("=== Email Body Display Debug (after layout) ===");
@@ -976,9 +994,15 @@ public class Inbox extends JPanel {
             if (controller != null && controller.isConnected()) {
                 controller.markAsRead(email, true);
 
-                // Refresh nếu đang filter UNREAD
+                // Refresh nếu đang filter UNREAD - NHƯNG chỉ khi đã quay về list view
+                // Không refresh trong khi đang xem email để tránh gián đoạn
                 if ("UNREAD".equals(filterMode)) {
-                    Timer refreshTimer = new Timer(500, ev -> controller.refresh());
+                    Timer refreshTimer = new Timer(500, ev -> {
+                        // Chỉ refresh nếu không còn xem email này nữa
+                        if (currentViewingEmail == null || currentViewingEmail.getMessageNumber() != email.getMessageNumber()) {
+                            controller.refresh();
+                        }
+                    });
                     refreshTimer.setRepeats(false);
                     refreshTimer.start();
                 }
@@ -1098,6 +1122,11 @@ public class Inbox extends JPanel {
         
         // Hide loading panel after data is loaded
         hideLoadingPanel();
+
+        if (waitingForConnectionNotification) {
+            waitingForConnectionNotification = false;
+            SwingUtilities.invokeLater(() -> Notifications.getInstance().show(Notifications.Type.SUCCESS, "Connected successfully!"));
+        }
 
         if (emails.isEmpty()) {
             String message = getMessage();

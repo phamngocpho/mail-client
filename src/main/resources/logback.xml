@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-    <!-- Set default log directory với fallback về Mail Client/logs -->
-    <property name="LOG_DIR" value="${LOG_DIR:-${user.dir}/Mail Client/logs}" />
+    <!-- Set default log directory với fallback về logs (thư mục gốc project) -->
+    <property name="LOG_DIR" value="${LOG_DIR:-${user.dir}/logs}" />
 
     <!-- Console Appender - Log ra console -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">

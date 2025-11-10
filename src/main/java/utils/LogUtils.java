@@ -9,7 +9,7 @@ import java.nio.file.Paths;
 
 /**
  * Utility class for configuring logging directories.
- * Sets up the log directory path to be in the Mail Client folder.
+ * Sets up the log directory path to be in the project root (logs folder).
  */
 public class LogUtils {
     private static final Logger logger = LoggerFactory.getLogger(LogUtils.class);
@@ -29,14 +29,14 @@ public class LogUtils {
             String classPathStr = classPath.toString();
             
             if (classPathStr.contains("target" + File.separator + "classes")) {
-                // Đang chạy từ IDE: target/classes → lên Mail Client/logs
+                // Đang chạy từ IDE: target/classes → lên logs ở thư mục gốc
                 logDir = classPath.getParent().getParent().resolve("logs");
             } else if (classPathStr.endsWith(".jar")) {
                 // Đang chạy từ JAR: tạo logs cùng thư mục với jar
                 logDir = classPath.getParent().resolve("logs");
             } else {
-                // Fallback: tạo trong Mail Client/logs
-                logDir = Paths.get(System.getProperty("user.dir"), "Mail Client", "logs");
+                // Fallback: tạo logs ở thư mục gốc project
+                logDir = Paths.get(System.getProperty("user.dir"), "logs");
             }
             
             // Set system property cho logback
@@ -46,8 +46,8 @@ public class LogUtils {
             logger.debug("Log directory set to: {}", logDir.toAbsolutePath());
             
         } catch (Exception e) {
-            // Fallback to default - log vào Mail Client/logs
-            String fallbackDir = System.getProperty("user.dir") + File.separator + "Mail Client" + File.separator + "logs";
+            // Fallback to default - log vào logs ở thư mục gốc
+            String fallbackDir = System.getProperty("user.dir") + File.separator + "logs";
             System.setProperty("LOG_DIR", fallbackDir);
             System.err.println("Warning: Could not determine log directory, using fallback: " + fallbackDir);
         }

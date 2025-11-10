@@ -32,7 +32,6 @@ logs/
 build/
 !**/src/main/**/build/
 !**/src/test/**/build/
-logs/
 dependency-reduced-pom.xml
 ### VS Code ###
 .vscode/
