@@ -1,7 +1,7 @@
 package components.panels.dashboard;
 
 import com.formdev.flatlaf.FlatClientProperties;
-import com.formdev.flatlaf.extras.FlatSVGIcon;
+import com.formdev.flatlaf.themes.FlatMacDarkLaf;
 import components.forms.FormsManager;
 import components.panels.welcome.Welcome;
 import controllers.SmtpController;
@@ -71,8 +71,7 @@ public class Settings extends JPanel {
         JPanel cacheSection = createSection(
             "Clear Cache",
             "Clear cached email bodies and HTML (keeps downloaded attachments)",
-            "icons/menu/drafts.svg",
-            "Clear Cache",
+                "Clear Cache",
             this::clearCache
         );
         panel.add(cacheSection, "wrap, growx");
@@ -85,8 +84,7 @@ public class Settings extends JPanel {
         JPanel dataSection = createSection(
             "Clear All Data",
             "Delete all cached data including attachments and the .mailclient folder",
-            "icons/dialog/warning.svg",
-            "Clear Data",
+                "Clear Data",
             this::clearAllData
         );
         panel.add(dataSection, "wrap, growx");
@@ -99,60 +97,57 @@ public class Settings extends JPanel {
         JPanel logoutSection = createSection(
             "Logout",
             "Sign out from your current account",
-            "icons/welcome/logout.svg",
-            "Logout",
+                "Logout",
             this::logout
         );
         panel.add(logoutSection, "wrap, growx");
         
         return panel;
     }
-    
-    private JPanel createSection(String title, String description, String iconPath, 
+
+    private JPanel createSection(String title, String description,
                                  String buttonText, Runnable action) {
-        JPanel panel = new JPanel(new MigLayout("fillx, insets 15", "[]15[grow]15[]", "[]5[]"));
-        
-        // Icon
-        try {
-            FlatSVGIcon icon = new FlatSVGIcon(iconPath);
-            icon = icon.derive(32, 32);
-            JLabel iconLabel = new JLabel(icon);
-            panel.add(iconLabel, "spany 2, aligny top");
-        } catch (Exception e) {
-            logger.warn("Could not load icon: {}", iconPath);
-            panel.add(new JLabel(), "spany 2, w 32!, h 32!");
-        }
-        
+        JPanel panel = new JPanel(new MigLayout(
+                "fillx, insets 20 25 20 25",
+                "[]20[grow]",
+                "[]8[]10[]"
+        ));
+
         // Title
         JLabel titleLabel = new JLabel(title);
-        titleLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +2");
-        panel.add(titleLabel, "wrap");
-        
+        titleLabel.putClientProperty(FlatClientProperties.STYLE,
+                "font: bold +3");
+        panel.add(titleLabel, "span 2, wrap");
+
         // Description
         JLabel descLabel = new JLabel(description);
-        descLabel.putClientProperty(FlatClientProperties.STYLE, 
-            "foreground: $Label.disabledForeground");
-        panel.add(descLabel);
-        
-        // Button
+        descLabel.putClientProperty(FlatClientProperties.STYLE,
+                "foreground: $Label.disabledForeground");
+        panel.add(descLabel, "span 2, wrap");
+
+        JSeparator separator = new JSeparator();
+        separator.putClientProperty(FlatClientProperties.STYLE,
+                "foreground: lighten($Component.borderColor,10%)");
+        panel.add(separator, "span 2, growx, wrap");
+
         JButton button = new JButton(buttonText);
-        button.putClientProperty(FlatClientProperties.BUTTON_TYPE, 
-            FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        button.putClientProperty(FlatClientProperties.STYLE,
+                "foreground: $Component.accentColor;" +
+                        "font: bold");
+        button.putClientProperty(FlatClientProperties.BUTTON_TYPE,
+                FlatClientProperties.BUTTON_TYPE_BORDERLESS);
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
         button.setFocusPainted(false);
         button.addActionListener(e -> action.run());
-        
-        panel.add(button, "spany 2, aligny center");
-        
-        // Border and background
-        panel.putClientProperty(FlatClientProperties.STYLE, 
-            "arc: 10; background: darken($Panel.background,3%)");
-        panel.setBorder(BorderFactory.createLineBorder(
-            UIManager.getColor("Component.borderColor"), 1, true));
-        
+
+        panel.add(button, "span 2, align right");
+
+        panel.putClientProperty(FlatClientProperties.STYLE,
+                "arc: 20;" + "background: lighten($Panel.background,1%);");
+
         return panel;
     }
-    
+
     private void clearCache() {
         int result = JOptionPane.showConfirmDialog(
             this,
@@ -260,6 +255,38 @@ public class Settings extends JPanel {
                 );
             }
         }
+    }
+
+    /**
+     * Main method for testing the Settings panel standalone
+     */
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                // Set FlatLaf look and feel
+                FlatMacDarkLaf.setup();
+
+                // Create frame
+                JFrame frame = new JFrame("Settings Test");
+                frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+                frame.setSize(800, 600);
+                frame.setLocationRelativeTo(null);
+
+                // Initialize notifications
+                Notifications.getInstance().setJFrame(frame);
+
+                // Add settings panel
+                Settings settingsPanel = new Settings();
+                frame.add(settingsPanel);
+
+                // Show frame
+                frame.setVisible(true);
+
+                logger.info("Settings test frame launched");
+            } catch (Exception e) {
+                logger.error("Error launching Settings test frame: {}", e.getMessage(), e);
+            }
+        });
     }
 }
 
