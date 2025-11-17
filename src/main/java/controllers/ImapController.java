@@ -4,6 +4,7 @@ import components.panels.dashboard.Inbox;
 import models.Email;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import protocols.imap.ImapException;
 import protocols.imap.ImapParser;
 import raven.toast.Notifications;
 import services.ImapService;
@@ -118,7 +119,7 @@ public class ImapController {
     public void connectSync(String host, String email, String password, boolean loadEmailsImmediately) throws Exception {
         // Connect to IMAP
         imapService.connect(host, email, password);
-
+        imapService.printAllFolders();
         if (loadEmailsImmediately) {
             // Fetch emails from INBOX
             List<Email> emails = imapService.fetchRecentEmails(currentFolder, Constants.EMAILS_PER_PAGE);
@@ -200,7 +201,7 @@ public class ImapController {
                 String host = utils.ConfigUtils.getImapHost();
                 String email = utils.ConfigUtils.getEmail();
                 String password = utils.ConfigUtils.getAppPassword();
-                
+
                 // Connect to IMAP - KHÔNG load emails ngay
                 // Emails sẽ được load sau khi thông báo "Connected successfully!" hiện ra
                 connectSync(host, email, password, false);
@@ -220,7 +221,7 @@ public class ImapController {
                     logger.info("Auto-connect successful");
                     setCurrentFolder(folderName);
                     onSuccess.run();
-                    
+
                 } catch (Exception e) {
                     logger.error("Auto-connect failed: {}", e.getMessage(), e);
                     
@@ -471,35 +472,30 @@ public class ImapController {
     /**
      * Delete email
      */
+    /**
+     * Delete email (move to Trash)
+     */
     public void deleteEmail(Email email) {
-        // Confirm dialog
-        int result = JOptionPane.showConfirmDialog(
-                null,
-                "Are you sure you want to delete this email?",
-                "Confirm Delete",
-                JOptionPane.YES_NO_OPTION
-        );
-
-        if (result != JOptionPane.YES_OPTION) {
-            return;
-        }
-
         AsyncUtils.executeVoidAsync(
-            () -> {
-                try {
-                    imapService.deleteEmail(currentFolder, email.getMessageNumber());
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            },
-            () -> {
-                // Refresh to remove from the list
-                refresh();
-                Notifications.getInstance().show(Notifications.Type.SUCCESS, "Email deleted");
-            },
-            e -> AsyncUtils.showError("delete email", e)
+                () -> {
+                    try {
+                        imapService.moveEmail(currentFolder, email.getMessageNumber(), "[Gmail]/Trash");
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                },
+                () -> {
+                    Notifications.getInstance().show(
+                            Notifications.Type.SUCCESS,
+                            "Moved to Trash"
+                    );
+                    refresh();
+                },
+                e -> AsyncUtils.showError("move to Trash", e)
         );
     }
+
+
 
     /**
      * Load email body khi user click vào email
@@ -750,6 +746,43 @@ public class ImapController {
         cacheTimestamps.clear();
         // Note: Không clear cacheManager vì nó lưu trên disk để dùng lại khi mở app
         logger.info("Cleared email list cache (body cache retained on disk)");
+    }
+    public void restoreEmail(Email email) {
+        AsyncUtils.executeVoidAsync(
+                () -> {
+                    try {
+                        imapService.moveEmail("[Gmail]/Trash", email.getMessageNumber(), "INBOX");
+                    } catch (ImapException e) {
+                        throw new RuntimeException(e);
+                    }
+                },
+                () -> {
+                    Notifications.getInstance().show(Notifications.Type.SUCCESS, "Email restored to Inbox");
+                    refresh();
+                },
+                e -> AsyncUtils.showError("restore email", e)
+        );
+    }
+
+    public void deleteForever(Email email) {
+        AsyncUtils.executeVoidAsync(
+                () -> {
+                    try {
+                        imapService.deleteEmail("[Gmail]/Trash", email.getMessageNumber());
+
+                    } catch (ImapException e) {
+                        throw new RuntimeException(e);
+                    }
+                },
+                () -> {
+                    Notifications.getInstance().show(Notifications.Type.SUCCESS, "Email permanently deleted");
+                    refresh();
+                },
+                e -> AsyncUtils.showError("delete permanently", e)
+        );
+    }
+    public ImapService getImapService() {
+        return imapService;
     }
 
     /**

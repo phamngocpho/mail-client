@@ -23,6 +23,7 @@ public class ImapService {
     private String currentHost;
     private String currentUser;
     private boolean isConnected = false;
+    private static ImapService instance;
     private final Logger logger = LoggerFactory.getLogger(ImapService.class);
 
     public ImapService() {
@@ -207,26 +208,7 @@ public class ImapService {
     /**
      * Move email to another folder (copy and delete)
      */
-    public void moveEmail(String fromFolder, int messageNumber, String toFolder) throws ImapException {
-        if (!isConnected) {
-            throw new ImapException("Not connected. Call connect() first.");
-        }
 
-        try {
-            if (!fromFolder.equals(client.getSelectedFolder())) {
-                client.selectFolder(fromFolder);
-            }
-
-            // Copy to the target folder
-            client.copyEmail(messageNumber, toFolder);
-
-            // Delete source
-            client.markAsDeleted(messageNumber);
-            client.expunge();
-        } catch (ImapException e) {
-            throw new ImapException("Failed to move email: " + e.getMessage(), e);
-        }
-    }
 
     /**
      * List tất cả folders
@@ -301,21 +283,103 @@ public class ImapService {
         }
     }
 
-    /**
-     * Test connection
-     */
-    public boolean testConnection(String host, String username, String password) {
+    public void moveEmail(String fromFolder, int messageNumber, String targetFolder) throws ImapException {
+        if (!isConnected) {
+            throw new ImapException("Not connected. Call connect() first.");
+        }
+
+        // Tự động phát hiện Trash folder đúng tên
+        String trashFolder = targetFolder;
+        if ("Trash".equalsIgnoreCase(targetFolder)) {
+            trashFolder = "[Gmail]/Trash";  // Gmail IMAP requires exact path
+        }
+
         try {
-            ImapClient testClient = new ImapClient();
-            testClient.connect(host);
-            testClient.login(username, password);
-            testClient.logout();
-            testClient.close();
-            return true;
-        } catch (Exception e) {
-            return false;
+            if (!fromFolder.equals(client.getSelectedFolder())) {
+                client.selectFolder(fromFolder);
+            }
+
+            // Sao chép email sang thư mục Trash thật
+            client.copyEmail(messageNumber, trashFolder);
+
+            // Đánh dấu email đã xóa trong folder gốc và expunge
+            client.markAsDeleted(messageNumber);
+            client.expunge();
+
+            logger.info("Moved email #{} from '{}' → '{}'", messageNumber, fromFolder, trashFolder);
+        } catch (ImapException e) {
+            throw new ImapException("Failed to move email: " + e.getMessage(), e);
         }
     }
+
+    /**
+     * Tự động phát hiện đúng thư mục Trash của server (Gmail, Outlook,...)
+     */
+    private String detectTrashFolder() {
+        try {
+            List<Folder> folders = listFolders();
+            for (Folder f : folders) {
+                String name = f.getFullPath().toLowerCase();
+                if (name.contains("trash") || name.contains("deleted")) {
+                    logger.debug("Detected trash folder: {}", f.getFullPath());
+                    return f.getFullPath();
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Cannot auto-detect Trash folder, fallback to [Gmail]/Trash");
+        }
+        // Nếu không tìm thấy thì fallback
+        return "[Gmail]/Trash";
+    }
+
+
+
+    /**
+     * Expunge specific folder
+     */
+    public void expunge(String folderName) throws ImapException {
+        if (!isConnected) {
+            throw new ImapException("Not connected. Call connect() first.");
+        }
+
+        try {
+            if (!folderName.equals(client.getSelectedFolder())) {
+                client.selectFolder(folderName);
+            }
+
+            client.expunge();
+            logger.info("Expunged folder: {}", folderName);
+        } catch (ImapException e) {
+            throw new ImapException("Failed to expunge: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Lấy tất cả email trong thư mục chỉ định (ví dụ "Trash")
+     */
+    public List<Email> fetchAllEmails(String folderName) throws ImapException {
+        if (!isConnected) throw new ImapException("Not connected to IMAP");
+        client.selectFolder(folderName);
+        return client.fetchAllEmails(); // đã có sẵn trong ImapClient
+    }
+
+
+    /**
+     * Debug: List all folders to find exact Trash folder name
+     */
+    public void printAllFolders() {
+        try {
+            List<Folder> folders = listFolders();
+            System.out.println("\n========== ALL IMAP FOLDERS ==========");
+            for (Folder folder : folders) {
+                System.out.println("  📁 " + folder.getFullPath());
+            }
+            System.out.println("======================================\n");
+        } catch (Exception e) {
+            logger.error("Failed to list folders", e);
+        }
+    }
+
 
     // Getters
     public boolean isConnected() {

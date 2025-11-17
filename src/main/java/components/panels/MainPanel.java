@@ -1,6 +1,8 @@
 package components.panels;
 
 import components.menus.MainMenu;
+import components.panels.dashboard.Compose;
+import components.panels.dashboard.Drafts;
 import net.miginfocom.swing.MigLayout;
 import utils.Constants;
 
@@ -11,15 +13,15 @@ import javax.swing.*;
  * that contains a menu bar (MainMenu) and a content area. It is designed
  * to organize and display different panels dynamically based on user interaction
  * with the menu.
- * <p>
- * This class extends JPanel and uses the MigLayout for flexible and precise layout
- * management. It initializes a menu bar on the left side and dynamically updates
- * the right-side content area with new panels as needed.
  */
 public class MainPanel extends JPanel {
 
     private MainMenu menu;
     private JPanel contentArea;
+    private JPanel currentPanel; // Track current panel
+    private Compose composePanel;
+    private Drafts draftsPanel;
+    private static MainPanel instance;
 
     public MainPanel() {
         init();
@@ -29,10 +31,18 @@ public class MainPanel extends JPanel {
         setLayout(new MigLayout("fill, insets 0", "[" + Constants.defaultMenuBarSize + "!][grow]", "[grow]"));
 
         menu = new MainMenu();
-
         contentArea = new JPanel(new MigLayout("fill, insets 0"));
 
-        menu.setMenuItemClickListener(this::setContent);
+        // Create Compose and Drafts panels
+        composePanel = new Compose();
+        draftsPanel = new Drafts();
+
+        // ⭐ KẾT NỐI 2 PANELS VỚI NHAU
+        composePanel.setDraftsPanel(draftsPanel);
+        draftsPanel.setComposePanel(composePanel);
+
+        // Set menu item click listener with auto-save
+        menu.setMenuItemClickListener(this::setContentWithAutoSave);
 
         menu.addLabel("Work");
         menu.addLabel("Personal");
@@ -43,20 +53,49 @@ public class MainPanel extends JPanel {
     }
 
     /**
-     * Sets the content panel of the content area and refreshes the layout.
-     *
-     * @param panel the JPanel to be displayed in the content area
+     * Sets the content panel with auto-save functionality
+     * Automatically saves draft when switching away from Compose panel
      */
-    public void setContent(JPanel panel) {
+    private void setContentWithAutoSave(JPanel newPanel) {
         SwingUtilities.invokeLater(() -> {
+            // LƯU DRAFT KHI CHUYỂN KHỎI COMPOSE PANEL
+            if (currentPanel instanceof Compose) {
+                ((Compose) currentPanel).saveDraftBeforeSwitching();
+            }
+
+            // Switch to new panel
             contentArea.removeAll();
-            contentArea.add(panel, "grow");
+            contentArea.add(newPanel, "grow");
             contentArea.revalidate();
             contentArea.repaint();
+
+            // Update current panel reference
+            currentPanel = newPanel;
+
+            // ⭐ REFRESH DRAFTS PANEL NẾU ĐANG CHUYỂN ĐẾN NÓ
+            if (newPanel instanceof Drafts) {
+                ((Drafts) newPanel).refresh();
+            }
         });
+    }
+
+    /**
+     * Original setContent method (kept for backward compatibility)
+     */
+    public void setContent(JPanel panel) {
+        setContentWithAutoSave(panel);
     }
 
     public MainMenu getMenu() {
         return menu;
     }
+
+    public Compose getComposePanel() {
+        return composePanel;
+    }
+
+    public Drafts getDraftsPanel() {
+        return draftsPanel;
+    }
+
 }

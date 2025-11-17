@@ -57,6 +57,7 @@
     <logger name="protocols.imap" level="DEBUG" />
     <logger name="components" level="INFO" />
     <logger name="components.panels.dashboard.Inbox" level="DEBUG" />
+    <logger name="components.panels.dashboard.Trash" level="DEBUG" />
     <logger name="utils" level="INFO" />
 
     <!-- Tắt log verbose của thư viện bên ngoài -->
