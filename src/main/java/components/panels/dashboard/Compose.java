@@ -504,7 +504,7 @@ public class Compose extends JPanel {
         ccField.setText("");
         bccField.setText("");
         subjectField.setText("");
-        bodyArea.setText("");
+        bodyArea.setText(UIUtils.getHtmlTemplate());
 
         // Remove CC and BCC fields from layout if visible
         if (ccVisible) {
@@ -521,6 +521,8 @@ public class Compose extends JPanel {
 
         attachments.clear();
         attachmentPanel.removeAll();
+        //Reset draft ID
+        currentDraftId = null;
         revalidate();
         repaint();
     }
@@ -651,19 +653,28 @@ public class Compose extends JPanel {
     }
 
     private boolean hasContent() {
-        return !toField.getText().trim().isEmpty() ||
-                !subjectField.getText().trim().isEmpty() ||
-                !bodyArea.getText().trim().isEmpty();
+        String to = toField.getText().trim();
+        String subject = subjectField.getText().trim();
+        String body = bodyArea.getText().trim();
+
+        // ⭐ So sánh tốt hơn - loại bỏ tất cả HTML tags và whitespace
+        String bodyText = body.replaceAll("<[^>]*>", "").replaceAll("\\s+", "");
+
+        return !to.isEmpty() || !subject.isEmpty() || !bodyText.isEmpty();
     }
 
     public void saveDraft() {
         if (!hasContent()) {
+            // THÊM THÔNG BÁO
+            Notifications.getInstance().show(
+                    Notifications.Type.WARNING,
+                    "Cannot save empty draft"
+            );
             return;
         }
 
         Email draft = createEmail();
 
-        // Giữ nguyên draft ID nếu đang edit draft cũ
         if (currentDraftId != null) {
             draft.setMessageId(currentDraftId);
         }
@@ -672,7 +683,7 @@ public class Compose extends JPanel {
         if (controller.saveDraft(draft)) {
             currentDraftId = draft.getMessageId();
             Notifications.getInstance().show(
-                    Notifications.Type.INFO,
+                    Notifications.Type.SUCCESS,  //     ĐỔI TỪ INFO SANG SUCCESS
                     "Draft saved"
             );
             refreshDraftsPanel();
@@ -882,13 +893,8 @@ public class Compose extends JPanel {
         DraftsController controller = DraftsController.getInstance();
         if (controller.saveDraft(draft)) {
             currentDraftId = draft.getMessageId();
-
-            // ════════════════════════════════════════════════════
-            // KHÔNG hiển thị notification to
-            // Chỉ log để debug
-            // ════════════════════════════════════════════════════
             System.out.println("Draft auto-saved when switching tab");
-
+            clearForm();
             refreshDraftsPanel();
         }
     }

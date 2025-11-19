@@ -9,8 +9,11 @@ import net.miginfocom.swing.MigLayout;
 import models.Email;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import protocols.imap.ImapException;
 import protocols.imap.ImapParser;
 import raven.toast.Notifications;
+import services.ImapService;
+import utils.AsyncUtils;
 import utils.Constants;
 import utils.EmailComposerHelper;
 import utils.EmailUtils;
@@ -30,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+import static java.time.zone.ZoneRulesProvider.refresh;
 import static utils.UIUtils.getFileIcon;
 
 /**
@@ -95,6 +99,7 @@ public class Inbox extends JPanel {
     private FlatSVGIcon starOutlineIcon;
     private FlatSVGIcon selectOutlineIcon;
     private final int iconSize = Constants.defaultIconSize - 5;
+    private ImapService imapService;
 
     // View switching
     private JPanel contentPanel;
@@ -294,7 +299,7 @@ public class Inbox extends JPanel {
         menu.add(markReadItem);
 
         // Delete
-        JMenuItem deleteItem = new JMenuItem("Delete");
+        JMenuItem   deleteItem = new JMenuItem("Delete");
         deleteItem.addActionListener(ev -> controller.deleteEmail(email));
         menu.add(deleteItem);
 
@@ -1291,4 +1296,5 @@ public class Inbox extends JPanel {
             Notifications.getInstance().show(Notifications.Type.ERROR, "Cannot open file: " + e.getMessage());
         }
     }
+
 }

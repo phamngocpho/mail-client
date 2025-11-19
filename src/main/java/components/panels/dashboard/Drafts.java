@@ -8,52 +8,47 @@ import models.Email;
 import net.miginfocom.swing.MigLayout;
 import raven.toast.Notifications;
 import utils.Constants;
+
 import javax.swing.*;
-import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.DefaultTableModel;
+import javax.swing.event.TableModelEvent;
+import javax.swing.table.*;
 import java.awt.*;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-/**
- * Panel hiển thị danh sách thư nháp - sử dụng giao diện giống Inbox
- */
 public class Drafts extends JPanel {
+
     private final DraftsController controller;
     private JTable emailTable;
     private DefaultTableModel tableModel;
     private Compose composePanel;
     private MainMenu.MenuItemClickListener menuItemClickListener;
+
     private List<Email> emails;
 
     private FlatSVGIcon starOutlineIcon;
-    private FlatSVGIcon selectOutlineIcon;
+
+    private JCheckBox headerCheckbox;   // ⬅ Ô tổng Select All
 
     public Drafts() {
         this.controller = DraftsController.getInstance();
         this.emails = new ArrayList<>();
+
         loadIcons();
         init();
         loadDrafts();
     }
 
     private void loadIcons() {
-        // Star icons
         int iconSize = Constants.defaultIconSize - 5;
         starOutlineIcon = new FlatSVGIcon("icons/inbox/star_outline.svg", iconSize, iconSize);
-        selectOutlineIcon = new FlatSVGIcon("icons/inbox/select.svg", iconSize, iconSize);
     }
 
     private void init() {
         setLayout(new BorderLayout());
-
-        // Header panel
-        JPanel headerPanel = createHeaderPanel();
-        add(headerPanel, BorderLayout.NORTH);
-
-        // Email list panel với JTable (giống Inbox)
+        add(createHeaderPanel(), BorderLayout.NORTH);
         add(createEmailListPanel(), BorderLayout.CENTER);
     }
 
@@ -67,53 +62,90 @@ public class Drafts extends JPanel {
         refreshBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, "roundRect");
         refreshBtn.addActionListener(e -> loadDrafts());
 
+        JButton deleteBtn = new JButton("Delete Selected");
+        deleteBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, "roundRect");
+        deleteBtn.addActionListener(e -> deleteSelectedDrafts());
+
         panel.add(titleLabel, "growx");
         panel.add(refreshBtn);
+        panel.add(deleteBtn, "gapleft 10");
 
         return panel;
     }
 
     private JScrollPane createEmailListPanel() {
         String[] columns = {"", "", "To", "Subject", "Time"};
+
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
-            public boolean isCellEditable(int row, int column) {
-                return false; // Không cho edit trong draft table
+            public boolean isCellEditable(int row, int col) {
+                return col == 0;  // chỉ checkbox được tick
             }
 
             @Override
-            public Class<?> getColumnClass(int columnIndex) {
-                if (columnIndex == 0) return Boolean.class;
-                if (columnIndex == 1) return ImageIcon.class; // Star column
-                return String.class;
+            public Class<?> getColumnClass(int col) {
+                return switch (col) {
+                    case 0 -> Boolean.class;
+                    case 1 -> ImageIcon.class;
+                    default -> String.class;
+                };
             }
         };
 
         emailTable = new JTable(tableModel);
-        emailTable.setFocusable(false);
         emailTable.setRowHeight(48);
         emailTable.setShowGrid(false);
         emailTable.setIntercellSpacing(new Dimension(0, 0));
         emailTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
+        // ============================================
+        //  HEADER CHECKBOX (SELECT ALL)
+        // ============================================
+        headerCheckbox = new JCheckBox();
+        headerCheckbox.setHorizontalAlignment(SwingConstants.CENTER);
+        headerCheckbox.setOpaque(false);
+
+        // Renderer dùng để hiển thị checkbox
+        TableColumn tc = emailTable.getColumnModel().getColumn(0);
+        tc.setMaxWidth(40);
+        tc.setHeaderRenderer((table, value, isSelected, hasFocus, row, col) -> headerCheckbox);
+
+        // Star column
+        TableColumn starCol = emailTable.getColumnModel().getColumn(1);
+        starCol.setMaxWidth(40);
+        starCol.setHeaderRenderer((table, value, isSelected, hasFocus, row, col) -> {
+            JLabel lbl = new JLabel(starOutlineIcon);
+            lbl.setHorizontalAlignment(SwingConstants.CENTER);
+            return lbl;
+        });
+
+        // ============================================
+        // CLICK HEADER = SELECT ALL
+        // ============================================
+        JTableHeader tableHeader = emailTable.getTableHeader();
+        tableHeader.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                int col = emailTable.columnAtPoint(e.getPoint());
+                if (col == 0) {
+                    boolean newState = !headerCheckbox.isSelected();
+                    headerCheckbox.setSelected(newState);
+                    toggleSelectAll(newState);
+                    tableHeader.repaint();
+                }
+            }
+        });
+
         // Column widths
-        emailTable.getColumnModel().getColumn(0).setMaxWidth(40);  // Checkbox
-        emailTable.getColumnModel().getColumn(0).setHeaderRenderer((jTable, o, b, b1, i, i1) -> new JLabel(selectOutlineIcon));
-        emailTable.getColumnModel().getColumn(1).setMaxWidth(40);  // Star
-        emailTable.getColumnModel().getColumn(1).setHeaderRenderer((jTable, o, b, b1, i, i1) -> new JLabel(starOutlineIcon));
-        emailTable.getColumnModel().getColumn(2).setPreferredWidth(200); // To
-        emailTable.getColumnModel().getColumn(3).setPreferredWidth(400); // Subject
-        emailTable.getColumnModel().getColumn(4).setPreferredWidth(100);  // Time
+        emailTable.getColumnModel().getColumn(2).setPreferredWidth(200);
+        emailTable.getColumnModel().getColumn(3).setPreferredWidth(400);
+        emailTable.getColumnModel().getColumn(4).setPreferredWidth(100);
 
-        // Custom header
-        javax.swing.table.JTableHeader header = emailTable.getTableHeader();
-        header.setPreferredSize(new Dimension(header.getWidth(), 40));
-
-        // Custom cell renderer
+        // Renderers
         emailTable.setDefaultRenderer(String.class, new DraftCellRenderer());
         emailTable.setDefaultRenderer(ImageIcon.class, new StarCellRenderer());
 
-        // Double-click để edit draft
+        // Double click => Edit draft
         emailTable.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseClicked(java.awt.event.MouseEvent e) {
@@ -126,9 +158,26 @@ public class Drafts extends JPanel {
             }
         });
 
-        JScrollPane scrollPane = new JScrollPane(emailTable);
-        scrollPane.setBorder(null);
-        return scrollPane;
+        // ============================================
+        //  TỰ ĐỒNG BỘ HEADER CHECKBOX
+        // ============================================
+        tableModel.addTableModelListener(e -> {
+            if (e.getType() == TableModelEvent.UPDATE) {
+                boolean allChecked = true;
+                for (int i = 0; i < tableModel.getRowCount(); i++) {
+                    if (!(boolean) tableModel.getValueAt(i, 0)) {
+                        allChecked = false;
+                        break;
+                    }
+                }
+                headerCheckbox.setSelected(allChecked);
+                emailTable.getTableHeader().repaint();
+            }
+        });
+
+        JScrollPane scroll = new JScrollPane(emailTable);
+        scroll.setBorder(null);
+        return scroll;
     }
 
     private void loadDrafts() {
@@ -137,83 +186,146 @@ public class Drafts extends JPanel {
     }
 
     private void refreshTable() {
-        // Sort emails by date DESC (newest)
-        emails.sort(Comparator.comparing(Email::getDate, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
+        // sort newest → oldest
+        emails.sort(Comparator.comparing(Email::getDate,
+                Comparator.nullsLast(Comparator.naturalOrder())).reversed());
 
         tableModel.setRowCount(0);
         SimpleDateFormat sdf = new SimpleDateFormat("MMM dd");
 
         for (Email email : emails) {
-            String to = email.getTo().isEmpty() ? "(No recipient)" : String.join(", ", email.getTo());
-            String subject = email.getSubject() == null || email.getSubject().isEmpty() ? "(No subject)" : email.getSubject();
-            String time = email.getDate() != null ? sdf.format(email.getDate()) : "";
+
+            String to = email.getTo().isEmpty()
+                    ? "(No recipient)"
+                    : String.join(", ", email.getTo());
+
+            String subject = (email.getSubject() == null || email.getSubject().isEmpty())
+                    ? "(No subject)"
+                    : email.getSubject();
+
+            String time = email.getDate() != null
+                    ? sdf.format(email.getDate())
+                    : "";
 
             tableModel.addRow(new Object[]{
-                    false,              // Checkbox
-                    starOutlineIcon,   // Star icon
+                    false,
+                    starOutlineIcon,
                     to,
                     subject,
                     time
             });
         }
+
+        headerCheckbox.setSelected(false);
+        emailTable.getTableHeader().repaint();
+    }
+
+    // ============================================
+    // SELECT ALL
+    // ============================================
+    private void toggleSelectAll(boolean selectAll) {
+        for (int i = 0; i < tableModel.getRowCount(); i++) {
+            tableModel.setValueAt(selectAll, i, 0);
+        }
+        emailTable.repaint();
+    }
+
+    // ============================================
+    // DELETE SELECTED DRAFTS
+    // ============================================
+    private void deleteSelectedDrafts() {
+        List<Email> toDelete = new ArrayList<>();
+
+        for (int i = 0; i < tableModel.getRowCount(); i++) {
+            boolean selected = (boolean) tableModel.getValueAt(i, 0);
+            if (selected) {
+                toDelete.add(emails.get(i));
+            }
+        }
+
+        if (toDelete.isEmpty()) {
+            Notifications.getInstance().show(
+                    Notifications.Type.WARNING,
+                    "No drafts selected"
+            );
+            return;
+        }
+
+        int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Delete " + toDelete.size() + " draft(s)?",
+                "Confirm",
+                JOptionPane.YES_NO_OPTION
+        );
+
+        if (confirm != JOptionPane.YES_OPTION) return;
+
+        for (Email e : toDelete) {
+            controller.deleteDraft(e);
+        }
+
+        Notifications.getInstance().show(
+                Notifications.Type.SUCCESS,
+                "Deleted " + toDelete.size() + " draft(s)"
+        );
+
+        loadDrafts();
     }
 
     private void editDraft(Email draft) {
         if (composePanel != null) {
             composePanel.loadDraft(draft);
-            
+
             if (menuItemClickListener != null) {
                 menuItemClickListener.onMenuItemClicked(composePanel);
             }
-            
-            Notifications.getInstance().show(Notifications.Type.INFO, "Editing draft");
+
+            Notifications.getInstance().show(
+                    Notifications.Type.INFO,
+                    "Editing draft"
+            );
         }
     }
 
-    // Custom cell renderer for draft rows
+    // Renderers
     private static class DraftCellRenderer extends DefaultTableCellRenderer {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
-                                                       boolean isSelected, boolean hasFocus, int row, int column) {
-            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-            
-            if (column == 1) {
-                setHorizontalAlignment(CENTER);
-            } else {
-                setHorizontalAlignment(LEFT);
-            }
-            
+                                                       boolean isSelected, boolean hasFocus,
+                                                       int row, int col) {
+            Component c = super.getTableCellRendererComponent(table, value,
+                    isSelected, hasFocus, row, col);
+            if (col == 1) setHorizontalAlignment(CENTER);
+            else setHorizontalAlignment(LEFT);
             return c;
         }
     }
 
-    // Star cell renderer
     private static class StarCellRenderer extends DefaultTableCellRenderer {
         @Override
-        public Component getTableCellRendererComponent(JTable table, Object value,
-                                                       boolean isSelected, boolean hasFocus, int row, int column) {
-            JLabel label = new JLabel();
-            label.setHorizontalAlignment(CENTER);
-            
-            if (value instanceof ImageIcon) {
-                label.setIcon((ImageIcon) value);
-            }
-            
-            label.setBackground(isSelected ? table.getSelectionBackground() : table.getBackground());
-            label.setOpaque(true);
+        public Component getTableCellRendererComponent(
+                JTable table, Object value,
+                boolean isSelected, boolean hasFocus,
+                int row, int col
+        ) {
+            JLabel lbl = new JLabel();
+            lbl.setHorizontalAlignment(CENTER);
+            if (value instanceof ImageIcon) lbl.setIcon((ImageIcon) value);
 
-            return label;
+            lbl.setOpaque(true);
+            lbl.setBackground(isSelected ? table.getSelectionBackground() : table.getBackground());
+            return lbl;
         }
     }
 
-    public void setComposePanel(Compose composePanel) {
-        this.composePanel = composePanel;
+    public void setComposePanel(Compose panel) {
+        this.composePanel = panel;
     }
 
     public void refresh() {
         loadDrafts();
     }
-    
+
     public void setMenuItemClickListener(MainMenu.MenuItemClickListener listener) {
         this.menuItemClickListener = listener;
     }

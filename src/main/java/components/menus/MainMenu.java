@@ -149,12 +149,13 @@ public class MainMenu extends JPanel {
         }
 
         JPanel settingsContent = new Settings();
-
+        JPanel trashContent = new Trash(((Inbox) inboxContent).getController());
         MenuItem inbox = createMenuItem("icons/menu/inbox.svg", "Inbox", true, inboxContent);
         MenuItem starred = createMenuItem("icons/inbox/star_outline.svg", "Starred", false, starredContent);
         MenuItem snoozed = createMenuItem("icons/menu/snoozed.svg", "Snoozed", false, snoozedContent);
         MenuItem sent = createMenuItem("icons/menu/sent.svg", "Sent", false, sentContent);
         MenuItem drafts = createMenuItem("icons/menu/drafts.svg", "Drafts", false, localDraftsPanel );
+        MenuItem trash = createMenuItem("icons/menu/trash.svg", "Trash", false, trashContent);
         MenuItem settings = createMenuItem("icons/menu/settings.svg", "Settings", false, settingsContent);
 
         menuItemsPanel.add(inbox, "wrap, growx");
@@ -162,6 +163,7 @@ public class MainMenu extends JPanel {
         menuItemsPanel.add(snoozed, "wrap, growx");
         menuItemsPanel.add(sent, "wrap, growx");
         menuItemsPanel.add(drafts, "wrap, growx");
+        menuItemsPanel.add(trash, "wrap, growx");
         menuItemsPanel.add(settings, "wrap, growx");
 
         selectedItem = inbox;
@@ -236,6 +238,10 @@ public class MainMenu extends JPanel {
                 @Override
                 public void mouseClicked(MouseEvent e) {
                     setSelected(true);
+
+                    if (contentPanel instanceof Trash) {
+                        ((Trash) contentPanel).loadTrashEmails();
+                    }
 
                     // Load emails khi chuyển tab
                     if (contentPanel instanceof Inbox inbox) {
