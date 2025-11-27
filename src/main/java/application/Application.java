@@ -13,7 +13,6 @@ import utils.PreferencesUtils;
 
 import javax.swing.*;
 import java.awt.*;
-
 /**
  * The Application class serves as the main entry point for the application.
  * It extends JFrame to provide a graphical user interface for the desktop application.

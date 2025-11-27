@@ -274,6 +274,54 @@ public class ImapController {
     }
 
     /**
+     * Load a specific page of emails
+     */
+    public void loadPage(String folderName, int page, int pageSize) {
+        SwingWorker<PageResult, Void> worker = new SwingWorker<>() {
+            @Override
+            protected PageResult doInBackground() throws Exception {
+                currentFolder = folderName;
+                int totalMessages = imapService.getMessageCount(folderName);
+                List<Email> emails = imapService.fetchPage(folderName, page, pageSize);
+                return new PageResult(emails, totalMessages);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    PageResult result = get();
+                    // Notify inboxes with page info
+                    for (Inbox inbox : registeredInboxes) {
+                        if (inbox.getFolderName().equals(folderName)) {
+                            SwingUtilities.invokeLater(() -> {
+                                inbox.setTotalMessages(result.totalMessages);
+                                inbox.loadEmails(result.emails);
+                            });
+                        }
+                    }
+                } catch (Exception e) {
+                    AsyncUtils.showError("load page", e);
+                }
+            }
+        };
+
+        worker.execute();
+    }
+    
+    /**
+     * Helper class to hold page result
+     */
+    private static class PageResult {
+        final List<Email> emails;
+        final int totalMessages;
+        
+        PageResult(List<Email> emails, int totalMessages) {
+            this.emails = emails;
+            this.totalMessages = totalMessages;
+        }
+    }
+    
+    /**
      * Refresh current folder
      */
     public void refresh() {
@@ -469,9 +517,6 @@ public class ImapController {
         );
     }
 
-    /**
-     * Delete email
-     */
     /**
      * Delete email (move to Trash)
      */

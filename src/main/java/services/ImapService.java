@@ -128,6 +128,65 @@ public class ImapService {
             throw new ImapException("Failed to fetch email range: " + e.getMessage(), e);
         }
     }
+    
+    /**
+     * Fetch emails for a specific page
+     * @param folderName Folder to fetch from
+     * @param page Page number (1-based)
+     * @param pageSize Number of emails per page
+     * @return List of emails for the specified page
+     */
+    public List<Email> fetchPage(String folderName, int page, int pageSize) throws ImapException {
+        if (!isConnected) {
+            throw new ImapException("Not connected. Call connect() first.");
+        }
+
+        try {
+            int messageCount = client.selectFolder(folderName);
+
+            if (messageCount == 0) {
+                return new ArrayList<>();
+            }
+
+            // Calculate start and end indices for the page
+            // Pages are 1-based, messages are numbered from newest (highest) to oldest (lowest)
+            int totalPages = (int) Math.ceil((double) messageCount / pageSize);
+            
+            // Clamp page to valid range
+            page = Math.max(1, Math.min(page, totalPages));
+            
+            // Calculate message range (newest first)
+            // Page 1 = newest messages (messageCount - pageSize + 1 to messageCount)
+            // Page 2 = next batch (messageCount - 2*pageSize + 1 to messageCount - pageSize)
+            int end = messageCount - (page - 1) * pageSize;
+            int start = Math.max(1, end - pageSize + 1);
+
+            logger.debug("Fetching page {} of {} (messages {}-{} out of {})", 
+                        page, totalPages, start, end, messageCount);
+
+            List<Email> emails = client.fetchEmails(start, end);
+
+            // Sử dụng EmailUtils để filter và sort emails
+            return EmailUtils.processEmails(emails);
+        } catch (ImapException e) {
+            throw new ImapException("Failed to fetch page: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Get total message count in a folder
+     */
+    public int getMessageCount(String folderName) throws ImapException {
+        if (!isConnected) {
+            throw new ImapException("Not connected. Call connect() first.");
+        }
+
+        try {
+            return client.selectFolder(folderName);
+        } catch (ImapException e) {
+            throw new ImapException("Failed to get message count: " + e.getMessage(), e);
+        }
+    }
 
     /**
      * Fetch body của email cụ thể
@@ -204,10 +263,6 @@ public class ImapService {
             throw new ImapException("Failed to delete email: " + e.getMessage(), e);
         }
     }
-
-    /**
-     * Move email to another folder (copy and delete)
-     */
 
 
     /**

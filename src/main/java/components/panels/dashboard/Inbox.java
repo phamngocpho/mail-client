@@ -9,11 +9,9 @@ import net.miginfocom.swing.MigLayout;
 import models.Email;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import protocols.imap.ImapException;
 import protocols.imap.ImapParser;
 import raven.toast.Notifications;
 import services.ImapService;
-import utils.AsyncUtils;
 import utils.Constants;
 import utils.EmailComposerHelper;
 import utils.EmailUtils;
@@ -33,7 +31,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-import static java.time.zone.ZoneRulesProvider.refresh;
 import static utils.UIUtils.getFileIcon;
 
 /**
@@ -113,6 +110,14 @@ public class Inbox extends JPanel {
     private final String folderName;
     private final String filterMode;
     
+    // Pagination
+    private int currentPage = 1;
+    private int totalMessages = 0;
+    private final int messagesPerPage = Constants.EMAILS_PER_PAGE;
+    private JButton prevButton;
+    private JButton nextButton;
+    private JLabel pageInfoLabel;
+    
     /**
      * Reset shared controller (for logout)
      */
@@ -146,9 +151,10 @@ public class Inbox extends JPanel {
             }
         } else {
             this.controller = sharedController;
-            // Load ngay nếu đã connected
+            // Load ngay nếu đã connected - use pagination
             if (controller.isConnected()) {
-                controller.loadFolder(folderName, Constants.EMAILS_PER_PAGE);
+                showLoadingPanel("Loading " + folderName + "...", "Fetching messages");
+                controller.loadPage(folderName, currentPage, messagesPerPage);
             }
         }
 
@@ -159,7 +165,7 @@ public class Inbox extends JPanel {
         if (controller.isConnected() && !"INBOX".equals(folderName)) {
             // Show loading skeleton trước khi load
             showLoadingPanel("Loading " + folderName + "...", "Fetching messages");
-            controller.loadFolder(folderName, Constants.EMAILS_PER_PAGE);
+            controller.loadPage(folderName, currentPage, messagesPerPage);
         }
     }
 
@@ -175,6 +181,14 @@ public class Inbox extends JPanel {
 
     public String getFolderName() {
         return folderName;
+    }
+    
+    /**
+     * Set total messages count (for pagination)
+     */
+    public void setTotalMessages(int total) {
+        this.totalMessages = total;
+        updatePageInfo();
     }
 
     private void init() {
@@ -404,7 +418,8 @@ public class Inbox extends JPanel {
                 // Đảm bảo connection đã fully ready trước khi user có thể click vào email
                 SwingUtilities.invokeLater(() -> {
                     controller.setCurrentFolder(folderName);
-                    controller.loadFolder(folderName, Constants.EMAILS_PER_PAGE);
+                    currentPage = 1; // Reset to first page
+                    controller.loadPage(folderName, currentPage, messagesPerPage);
                     // Notification được show trong loadEmails() sau khi emails được load xong
                 });
             },
@@ -496,7 +511,8 @@ public class Inbox extends JPanel {
             showLoadingPanel("Loading " + folderName + "...", "Fetching messages");
             // Update current folder và load
             controller.setCurrentFolder(folderName);
-            controller.loadFolder(folderName, Constants.EMAILS_PER_PAGE);
+            currentPage = 1; // Reset to first page
+            controller.loadPage(folderName, currentPage, messagesPerPage);
         }
     }
     
@@ -510,7 +526,8 @@ public class Inbox extends JPanel {
         // Load emails cho tất cả các tab sau khi connect
         if (connected) {
             controller.setCurrentFolder(folderName);
-            controller.loadFolder(folderName, Constants.EMAILS_PER_PAGE);
+            currentPage = 1; // Reset to first page
+            controller.loadPage(folderName, currentPage, messagesPerPage);
         }
 
         // Nếu user cancel, hiển thị thông báo
@@ -536,7 +553,10 @@ public class Inbox extends JPanel {
     /**
      * Email list panel (left side)
      */
-    private JScrollPane createEmailListPanel() {
+    private JPanel createEmailListPanel() {
+        // Main panel with table and pagination
+        JPanel listPanel = new JPanel(new MigLayout("fill, insets 0", "[grow]", "[grow][]"));
+        
         String[] columns = {"", "", "Sender", "Subject", "Time"};
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
@@ -616,7 +636,102 @@ public class Inbox extends JPanel {
 
         JScrollPane scrollPane = new JScrollPane(emailTable);
         scrollPane.setBorder(null);
-        return scrollPane;
+        listPanel.add(scrollPane, "grow, wrap");
+        
+        // Add pagination controls
+        listPanel.add(createPaginationPanel(), "growx, h 40!");
+        
+        return listPanel;
+    }
+    
+    /**
+     * Creates pagination controls panel
+     */
+    private JPanel createPaginationPanel() {
+        JPanel paginationPanel = new JPanel(new MigLayout("fill, insets 5", "push[]10[]10[]push", "[]"));
+        paginationPanel.setOpaque(true);
+        
+        // Previous button
+        prevButton = new JButton("Previous");
+        prevButton.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        prevButton.setEnabled(false);
+        prevButton.addActionListener(e -> loadPreviousPage());
+        
+        // Page info label
+        pageInfoLabel = new JLabel("Page 1");
+        pageInfoLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        updatePageInfo();
+        
+        // Next button
+        nextButton = new JButton("Next");
+        nextButton.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        nextButton.setEnabled(false);
+        nextButton.addActionListener(e -> loadNextPage());
+        
+        paginationPanel.add(prevButton);
+        paginationPanel.add(pageInfoLabel, "w 200!");
+        paginationPanel.add(nextButton);
+        
+        return paginationPanel;
+    }
+    
+    /**
+     * Update page info label
+     */
+    private void updatePageInfo() {
+        if (pageInfoLabel == null) return;
+        
+        int totalPages = (int) Math.ceil((double) totalMessages / messagesPerPage);
+        if (totalPages == 0) totalPages = 1;
+        
+        // Calculate range of emails being displayed
+        int startEmail = (currentPage - 1) * messagesPerPage + 1;
+        int endEmail = Math.min(currentPage * messagesPerPage, totalMessages);
+        
+        if (totalMessages == 0) {
+            pageInfoLabel.setText("0 messages");
+        } else {
+            pageInfoLabel.setText(String.format("%d-%d of %d", startEmail, endEmail, totalMessages));
+        }
+        
+        // Update button states
+        if (prevButton != null) {
+            prevButton.setEnabled(currentPage > 1);
+        }
+        if (nextButton != null) {
+            nextButton.setEnabled(currentPage < totalPages);
+        }
+    }
+    
+    /**
+     * Load previous page
+     */
+    private void loadPreviousPage() {
+        if (currentPage > 1) {
+            currentPage--;
+            loadPage(currentPage);
+        }
+    }
+    
+    /**
+     * Load next page
+     */
+    private void loadNextPage() {
+        int totalPages = (int) Math.ceil((double) totalMessages / messagesPerPage);
+        if (currentPage < totalPages) {
+            currentPage++;
+            loadPage(currentPage);
+        }
+    }
+    
+    /**
+     * Load specific page
+     */
+    private void loadPage(int page) {
+        if (controller != null && controller.isConnected()) {
+            showLoadingPanel("Loading page " + page + "...", "Fetching messages");
+            controller.loadPage(folderName, page, messagesPerPage);
+        }
     }
 
     /**
@@ -1124,6 +1239,9 @@ public class Inbox extends JPanel {
         }
 
         refreshTable();
+        
+        // Update pagination UI
+        updatePageInfo();
         
         // Hide loading panel after data is loaded
         hideLoadingPanel();
