@@ -270,7 +270,7 @@ public class SmtpSender {
     /**
      * Sends the content of the provided Email object to the output stream. This method handles
      * formatting the email headers and body according to the MIME format, including support for
-     * plain text and attachments.
+     * plain text, HTML content, and attachments.
      *
      * @param email an Email object containing the details of the email to send, including headers
      *              (e.g., sender, recipients, subject) and content (e.g., body, attachments).
@@ -287,6 +287,9 @@ public class SmtpSender {
         writer.println("Subject: " + (email.getSubject() != null ? email.getSubject() : "(No Subject)"));
         writer.println("MIME-Version: 1.0");
 
+        // Kiểm tra xem body có chứa HTML không
+        boolean isHtml = isHtmlContent(email.getBody());
+
         // Nếu có file đính kèm
         if (email.getAttachments() != null && !email.getAttachments().isEmpty()) {
             String boundary = "BOUNDARY_" + System.currentTimeMillis();
@@ -295,9 +298,13 @@ public class SmtpSender {
             writer.println("This is a multipart message in MIME format.");
             writer.println();
 
-            // ---- Phần body (text)
+            // ---- Phần body (text hoặc HTML)
             writer.println("--" + boundary);
-            writer.println("Content-Type: text/plain; charset=UTF-8");
+            if (isHtml) {
+                writer.println("Content-Type: text/html; charset=UTF-8");
+            } else {
+                writer.println("Content-Type: text/plain; charset=UTF-8");
+            }
             writer.println("Content-Transfer-Encoding: 8bit");
             writer.println();
             sendBodyText(email.getBody());
@@ -320,12 +327,41 @@ public class SmtpSender {
             writer.println("--" + boundary + "--");
 
         } else {
-            // Không có file đính kèm → gửi text bình thường
-            writer.println("Content-Type: text/plain; charset=UTF-8");
+            // Không có file đính kèm → gửi text hoặc HTML
+            if (isHtml) {
+                writer.println("Content-Type: text/html; charset=UTF-8");
+            } else {
+                writer.println("Content-Type: text/plain; charset=UTF-8");
+            }
             writer.println("Content-Transfer-Encoding: 8bit");
             writer.println();
             sendBodyText(email.getBody());
         }
+    }
+
+    /**
+     * Kiểm tra xem nội dung body có phải là HTML không
+     * 
+     * @param body nội dung email body
+     * @return true nếu body chứa HTML tags, false nếu là plain text
+     */
+    private boolean isHtmlContent(String body) {
+        if (body == null || body.trim().isEmpty()) {
+            return false;
+        }
+        
+        String trimmed = body.trim();
+        // Kiểm tra các dấu hiệu của HTML
+        return trimmed.startsWith("<html>") || 
+               trimmed.startsWith("<HTML>") ||
+               trimmed.contains("<body") ||
+               trimmed.contains("<BODY") ||
+               trimmed.contains("<div") ||
+               trimmed.contains("<DIV") ||
+               trimmed.contains("<p>") ||
+               trimmed.contains("<P>") ||
+               trimmed.contains("<br") ||
+               trimmed.contains("<BR");
     }
 
     /**
