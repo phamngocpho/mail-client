@@ -867,11 +867,77 @@ public class ImapParser {
                 case "8bit":
                 case "binary":
                 default:
-                    // Try to decode as UTF-8 or specified charset
+                    // For 7bit/8bit, content is already text, but may have been decoded with wrong charset
+                    // This happens when IMAP literal data is read as char[] instead of byte[]
+                    // We need to detect and fix charset issues
                     try {
-                        return new String(content.getBytes(StandardCharsets.ISO_8859_1), charset);
+                        // Check if content contains replacement characters or looks corrupted
+                        boolean hasReplacementChars = content.contains("\uFFFD");
+                        boolean looksCorrupted = hasReplacementChars || 
+                            (charset.equalsIgnoreCase("UTF-8") && containsInvalidUtf8Sequences(content));
+                        
+                        if (looksCorrupted) {
+                            logger.warn("Content appears corrupted, attempting charset fix. Charset from header: {}", charset);
+                            
+                            // Strategy: Try to re-encode with common wrong charsets, then decode with the correct one
+                            // Common scenario: Content was read with Windows-1252/ISO-8859-1 but should be UTF-8
+                            
+                            // Try 1: Assume content was decoded with ISO-8859-1, re-encode and decode with UTF-8
+                            try {
+                                byte[] bytes = content.getBytes(StandardCharsets.ISO_8859_1);
+                                String utf8Result = new String(bytes, StandardCharsets.UTF_8);
+                                if (!utf8Result.contains("\uFFFD") && isValidUtf8(utf8Result) && 
+                                    containsVietnameseChars(utf8Result)) {
+                                    logger.info("Fixed encoding: ISO-8859-1 → UTF-8");
+                                    return utf8Result;
+                                }
+                            } catch (Exception e) {
+                                logger.debug("ISO-8859-1 → UTF-8 conversion failed: {}", e.getMessage());
+                            }
+                            
+                            // Try 2: Assume content was decoded with Windows-1252, re-encode and decode with UTF-8
+                            try {
+                                byte[] bytes = content.getBytes(java.nio.charset.Charset.forName("Windows-1252"));
+                                String utf8Result = new String(bytes, StandardCharsets.UTF_8);
+                                if (!utf8Result.contains("\uFFFD") && isValidUtf8(utf8Result) && 
+                                    containsVietnameseChars(utf8Result)) {
+                                    logger.info("Fixed encoding: Windows-1252 → UTF-8");
+                                    return utf8Result;
+                                }
+                            } catch (Exception e) {
+                                logger.debug("Windows-1252 → UTF-8 conversion failed: {}", e.getMessage());
+                            }
+                            
+                            // Try 3: Use charset from header if different from UTF-8
+                            if (!charset.equalsIgnoreCase("UTF-8")) {
+                                try {
+                                    byte[] bytes = content.getBytes(StandardCharsets.ISO_8859_1);
+                                    String result = new String(bytes, charset);
+                                    if (!result.contains("\uFFFD")) {
+                                        logger.info("Using charset from header: {}", charset);
+                                        return result;
+                                    }
+                                } catch (Exception e) {
+                                    logger.debug("Header charset {} conversion failed: {}", charset, e.getMessage());
+                                }
+                            }
+                        }
+                        
+                        // Normal case: content should already be correct, but ensure charset interpretation
+                        byte[] bytes = content.getBytes(StandardCharsets.ISO_8859_1);
+                        String result = new String(bytes, charset);
+                        
+                        // If the result looks good, return it
+                        if (!result.contains("\uFFFD")) {
+                            return result;
+                        }
+                        
+                        // Fallback: return the original if all conversions fail
+                        logger.warn("All charset conversion attempts failed, returning original content");
+                        return content.trim();
+                        
                     } catch (Exception e) {
-                        logger.debug("Failed to decode with charset {}, using default", charset);
+                        logger.error("Failed to decode with charset {}: {}", charset, e.getMessage(), e);
                         return content.trim();
                     }
             }
@@ -1079,5 +1145,39 @@ public class ImapParser {
      */
     public static boolean isError(String response, String tag) {
         return response.contains(tag + " NO") || response.contains(tag + " BAD");
+    }
+    
+    /**
+     * Check if string is valid UTF-8 (doesn't contain replacement characters)
+     */
+    private static boolean isValidUtf8(String text) {
+        return text != null && !text.contains("\uFFFD");
+    }
+    
+    /**
+     * Check if string contains invalid UTF-8 sequences (common signs of wrong charset)
+     */
+    private static boolean containsInvalidUtf8Sequences(String text) {
+        if (text == null) return false;
+        // Check for common patterns that indicate wrong charset:
+        // - High frequency of characters > 127 that don't form valid UTF-8
+        // - Sequences that look like Windows-1252 misinterpreted as UTF-8
+        int highByteCount = 0;
+        for (char c : text.toCharArray()) {
+            if (c > 127) {
+                highByteCount++;
+            }
+        }
+        // If more than 10% of chars are high bytes, likely wrong charset
+        return highByteCount > text.length() * 0.1;
+    }
+    
+    /**
+     * Check if a string contains Vietnamese characters (indicates correct UTF-8)
+     */
+    private static boolean containsVietnameseChars(String text) {
+        if (text == null) return false;
+        // Vietnamese characters range: à-ỹ, À-Ỹ, đ, Đ
+        return text.matches(".*[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđĐÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸỴĐ].*");
     }
 }
