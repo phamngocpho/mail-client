@@ -44,7 +44,7 @@ public class SmtpSender {
                 // SSL connection (port 465)
                 socket = NetworkUtils.createSSLSocket(
                         host, port,
-                        null,
+                        Constants.LOCAL_IP,
                         0
                 );
             } else {

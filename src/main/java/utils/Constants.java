@@ -32,6 +32,9 @@ public class Constants {
     public static final int SMTP_TLS_PORT = 587;
     public static final int SMTP_PORT = 2;
 
+    // Local IP Configuration (null = auto, set to your local IP if needed)
+    public static final String LOCAL_IP = null; // Set to your local IP address (e.g., "192.168.1.100") or null for auto
+
     // Timeouts
     public static final int SOCKET_TIMEOUT = 60000; // 60 seconds (increased for large email fetches)
     public static final int CONNECTION_TIMEOUT = 10000; // 10 seconds

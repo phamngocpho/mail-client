@@ -54,7 +54,7 @@ public class ImapClient {
             logger.info("Connecting to {}:{}", host, port);
             socket = NetworkUtils.createSSLSocket(
                     host, port,
-                    null,
+                    Constants.LOCAL_IP,
                     0
             );
             reader = NetworkUtils.createReader(socket);
