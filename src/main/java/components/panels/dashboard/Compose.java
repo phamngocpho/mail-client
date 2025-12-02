@@ -657,7 +657,7 @@ public class Compose extends JPanel {
         String subject = subjectField.getText().trim();
         String body = bodyArea.getText().trim();
 
-        // ⭐ So sánh tốt hơn - loại bỏ tất cả HTML tags và whitespace
+        // So sánh tốt hơn - loại bỏ tất cả HTML tags và whitespace
         String bodyText = body.replaceAll("<[^>]*>", "").replaceAll("\\s+", "");
 
         return !to.isEmpty() || !subject.isEmpty() || !bodyText.isEmpty();
